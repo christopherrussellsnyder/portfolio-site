@@ -1,0 +1,1 @@
+ALTER TABLE public.uploaded_analytics DROP CONSTRAINT IF EXISTS uploaded_analytics_platform_check;

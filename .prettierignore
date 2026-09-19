@@ -1,0 +1,10 @@
+dist
+build
+node_modules
+.lovable
+coverage
+*.min.js
+*.min.css
+public
+src/integrations/supabase/types.ts
+remotion/out
