@@ -19,7 +19,7 @@ interface ReauthenticationEmailProps {
   token: string
 }
 
-const LOGO_URL = 'https://yxpzkcqeqzpgysvrrezc.supabase.co/storage/v1/object/public/email-assets/korex-wordmark-lockup.png'
+const LOGO_URL = 'https://vfwwhhkrquhbohlzazwo.supabase.co/storage/v1/object/public/email-assets/korex-wordmark-lockup.png'
 
 export const ReauthenticationEmail = ({ token }: ReauthenticationEmailProps) => (
   <Html lang="en" dir="ltr">
