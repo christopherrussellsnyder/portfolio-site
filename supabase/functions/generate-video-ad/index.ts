@@ -1,7 +1,8 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import { resolveVideoQuota, videoCorsHeaders as corsHeaders } from "../_shared/video-quota.ts";
+import { resolveVideoQuota } from "../_shared/video-quota.ts";
 import { checkRateLimit, clientKey } from "../_shared/rate-limit.ts";
 import { createHeygenVideo, ASPECT_DIMENSIONS, type RenderScene } from "../_shared/heygen.ts";
+import { getCorsHeaders } from "../_shared/cors.ts";
 import {
   formatSpec,
   normalizePlan,
@@ -10,15 +11,16 @@ import {
 
 const MAX_SCRIPT_CHARS = 3000;
 
-
-function json(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
-}
-
 serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
+
+  function json(body: unknown, status = 200) {
+    return new Response(JSON.stringify(body), {
+      status,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }

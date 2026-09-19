@@ -1,7 +1,8 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import { resolveVideoQuota, videoCorsHeaders as corsHeaders } from "../_shared/video-quota.ts";
+import { resolveVideoQuota } from "../_shared/video-quota.ts";
 import { getHeygenStatus } from "../_shared/heygen.ts";
 import { formatSpec } from "../_shared/ad-production.ts";
+import { getCorsHeaders } from "../_shared/cors.ts";
 
 const BUCKET = "video-ads";
 const SIGNED_URL_TTL = 60 * 60; // 1 hour
@@ -43,14 +44,16 @@ function mp4Dimensions(buffer: ArrayBuffer): { width: number; height: number } |
   return best;
 }
 
-function json(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
-}
-
 serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
+
+  function json(body: unknown, status = 200) {
+    return new Response(JSON.stringify(body), {
+      status,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }

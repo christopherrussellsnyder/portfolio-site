@@ -1,11 +1,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { serviceClient } from "../_shared/supabase.ts";
 import { checkRateLimit, clientKey } from "../_shared/rate-limit.ts";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { getCorsHeaders } from "../_shared/cors.ts";
 
 const SYSTEM_PROMPT = `You are Korex Support, the AI-powered customer support agent for Korex Intelligence — an AI marketing strategy platform.
 
@@ -37,6 +33,7 @@ When escalating, end your reply with the literal token [ESCALATE] on its own lin
 If a question is outside Korex scope (unrelated coding, personal advice, etc.), gently redirect to what Korex does help with.`;
 
 serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {

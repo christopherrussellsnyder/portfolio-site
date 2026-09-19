@@ -1,10 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { serviceClient } from "../_shared/supabase.ts";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { getCorsHeaders } from "../_shared/cors.ts";
 
 const PLATFORMS = ["meta", "tiktok", "google", "linkedin"];
 const PRIORITY_NICHES = [
@@ -62,6 +58,7 @@ Be specific to ${platform} and ${niche}. No generic platitudes. No fake precisio
 
 
 serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {

@@ -37,6 +37,11 @@ VITE_SENTRY_DSN=https://xxxxx@xxxxx.ingest.sentry.io/xxxxx
 
 # Google Analytics
 VITE_GA_MEASUREMENT_ID=G-XXXXXXXXXX
+
+# CORS allowlist for edge functions (comma-separated, no trailing slash).
+# Defaults to korexintelligencesystems.com + the Lovable preview domain +
+# localhost if unset — override this if you deploy under a different domain.
+ALLOWED_ORIGINS=https://korexintelligencesystems.com,https://www.korexintelligencesystems.com
 ```
 
 ### 3. External Services Setup

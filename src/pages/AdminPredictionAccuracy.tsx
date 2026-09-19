@@ -1,29 +1,19 @@
-import { Link, Navigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { ArrowLeft, Loader2, RefreshCw, TrendingDown, TrendingUp } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/contexts/AuthContext';
+import { useIsAdmin } from '@/hooks/useIsAdmin';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { toast } from '@/hooks/use-toast';
 
 export default function AdminPredictionAccuracy() {
-  const { user, loading: authLoading } = useAuth();
+  // AdminRoute (see App.tsx) already gates this page to signed-in admins/owners.
+  const { isAdmin: allowed } = useIsAdmin();
   const qc = useQueryClient();
-
-  const roleQuery = useQuery({
-    queryKey: ['user-role', user?.id],
-    enabled: !!user,
-    staleTime: 5 * 60_000,
-    queryFn: async () => {
-      const { data } = await supabase.from('user_roles').select('role').eq('user_id', user!.id);
-      return (data ?? []).some((r) => r.role === 'owner' || r.role === 'admin');
-    },
-  });
-  const allowed = roleQuery.data === true;
 
   const trendQuery = useQuery({
     queryKey: ['prediction-accuracy-daily'],
@@ -67,12 +57,6 @@ export default function AdminPredictionAccuracy() {
     },
     onError: (e: Error) => toast({ title: 'Run failed', description: e.message, variant: 'destructive' }),
   });
-
-  if (authLoading || roleQuery.isLoading) {
-    return <div className="flex min-h-screen items-center justify-center"><Loader2 className="w-6 h-6 animate-spin" /></div>;
-  }
-  if (!user) return <Navigate to="/login" replace />;
-  if (!allowed) return <Navigate to="/ai-strategist" replace />;
 
   const trend = (trendQuery.data ?? []) as any[];
   const latest = trend[trend.length - 1];

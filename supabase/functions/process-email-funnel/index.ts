@@ -1,9 +1,5 @@
 import { createClient } from 'npm:@supabase/supabase-js@2'
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+import { getCorsHeaders } from '../_shared/cors.ts'
 
 // Funnel cadence: Day 0, Day 2, Day 4, Day 7, Day 10
 const STEP_DELAYS_HOURS = [0, 48, 96, 168, 240]
@@ -17,6 +13,7 @@ const STEP_TEMPLATES = [
 const TOTAL_STEPS = 5
 
 Deno.serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req)
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders })
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!

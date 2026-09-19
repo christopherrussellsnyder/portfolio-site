@@ -2,12 +2,7 @@
 // Resolves the caller's tier, monthly video allowance, and current usage.
 // Returns a Response (401/402) when the caller may not render, otherwise the quota context.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
-};
+import { getCorsHeaders } from "./cors.ts";
 
 // Founder accounts bypass every tier and quota check.
 const FOUNDER_EMAILS = new Set(["chrissnyder3456@gmail.com"]);
@@ -34,10 +29,10 @@ export interface VideoQuotaContext {
   supabase: ReturnType<typeof createClient>;
 }
 
-function json(body: unknown, status: number) {
+function json(req: Request, body: unknown, status: number) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
+    headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
   });
 }
 
@@ -53,7 +48,7 @@ export async function resolveVideoQuota(
 
   const authHeader = req.headers.get("Authorization");
   if (!authHeader) {
-    return json({ error: "Authentication required", code: "UNAUTHENTICATED" }, 401);
+    return json(req, { error: "Authentication required", code: "UNAUTHENTICATED" }, 401);
   }
 
   const supabase = createClient(
@@ -65,7 +60,7 @@ export async function resolveVideoQuota(
   const token = authHeader.replace("Bearer ", "");
   const { data: userData, error: userError } = await supabase.auth.getUser(token);
   if (userError || !userData.user) {
-    return json({ error: "Invalid session", code: "UNAUTHENTICATED" }, 401);
+    return json(req, { error: "Invalid session", code: "UNAUTHENTICATED" }, 401);
   }
 
   const user = userData.user;
@@ -111,6 +106,7 @@ export async function resolveVideoQuota(
   if (enforce && remaining <= 0) {
     if (isTrial) {
       return json(
+        req,
         {
           error:
             "You've used both of your free trial videos. Upgrade to Pro for 10 AI video ads every month.",
@@ -123,6 +119,7 @@ export async function resolveVideoQuota(
       );
     }
     return json(
+      req,
       {
         error: `You've used all ${limit} video renders in your plan this month. Your allowance resets on the 1st.`,
         code: "VIDEO_QUOTA_EXHAUSTED",

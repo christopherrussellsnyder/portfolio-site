@@ -1,6 +1,9 @@
 // Temporary narration generator for demo video
+import { getCorsHeaders } from "../_shared/cors.ts";
+
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "*" } });
+  const corsHeaders = getCorsHeaders(req);
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   const { text, voice = "21m00Tcm4TlvDq8ikWAM", stability = 0.42, style = 0.55, similarity_boost = 0.85 } = await req.json();
   const key = Deno.env.get("ELEVENLABS_API_KEY");
   if (!key) return new Response("no key", { status: 500 });
@@ -14,5 +17,5 @@ Deno.serve(async (req) => {
     }),
   });
   if (!r.ok) return new Response(await r.text(), { status: r.status });
-  return new Response(r.body, { headers: { "Content-Type": "audio/mpeg", "Access-Control-Allow-Origin": "*" } });
+  return new Response(r.body, { headers: { ...corsHeaders, "Content-Type": "audio/mpeg" } });
 });

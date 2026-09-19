@@ -1,19 +1,22 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import { resolveVideoQuota, videoCorsHeaders as corsHeaders } from "../_shared/video-quota.ts";
+import { resolveVideoQuota } from "../_shared/video-quota.ts";
 import { listHeygenAvatars, listHeygenVoices } from "../_shared/heygen.ts";
+import { getCorsHeaders } from "../_shared/cors.ts";
 
 // The actor catalog changes rarely; cache it project-wide to avoid burning
 // provider rate limit on every page visit.
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
-function json(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
-}
-
 serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
+
+  function json(body: unknown, status = 200) {
+    return new Response(JSON.stringify(body), {
+      status,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }

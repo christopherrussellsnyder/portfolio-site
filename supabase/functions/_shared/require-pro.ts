@@ -1,14 +1,10 @@
 // Shared server-side gate: require an active Pro or Agency subscription.
 // Returns null when authorized, or a Response (402/401) that the caller should return.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
-};
+import { getCorsHeaders } from "./cors.ts";
 
 export async function requirePro(req: Request): Promise<{ userId: string } | Response> {
+  const corsHeaders = getCorsHeaders(req);
   const authHeader = req.headers.get("Authorization");
   if (!authHeader) {
     return new Response(

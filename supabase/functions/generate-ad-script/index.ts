@@ -3,25 +3,22 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { checkRateLimit, clientKey } from "../_shared/rate-limit.ts";
 import { loadBrandKit, recentTreatments, normalizePlan } from "../_shared/ad-production.ts";
 import { buildAdCtx, gatherAdIntel, normalizeAdPlatform } from "../_shared/ad-intel.ts";
-
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { getCorsHeaders } from "../_shared/cors.ts";
 
 const MODEL = "google/gemini-2.5-flash";
 
 type HookAngle = "intelligence" | "time" | "money" | "auto";
 
-function json(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
-}
-
 serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
+
+  function json(body: unknown, status = 200) {
+    return new Response(JSON.stringify(body), {
+      status,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }

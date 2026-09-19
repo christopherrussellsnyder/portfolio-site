@@ -2,11 +2,7 @@
 import { serviceClient } from "../_shared/supabase.ts";
 import { requirePro } from "../_shared/require-pro.ts";
 import { checkRateLimit, clientKey } from "../_shared/rate-limit.ts";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { getCorsHeaders } from "../_shared/cors.ts";
 
 // Platform-aware aspect ratios -> gpt-image-2 size strings
 function sizeForPlatform(platform?: string, postType?: string): string {
@@ -173,6 +169,7 @@ async function enhanceBrief(prompt: string, apiKey: string): Promise<string> {
 }
 
 Deno.serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   const rl = await checkRateLimit(clientKey(req, "generate-post-visual"), { limit: 15, windowMs: 60000 });

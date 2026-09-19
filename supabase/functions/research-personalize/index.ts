@@ -6,12 +6,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { serviceClient } from "../_shared/supabase.ts";
 import { checkRateLimit, clientKey } from "../_shared/rate-limit.ts";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-};
+import { getCorsHeaders } from "../_shared/cors.ts";
 
 const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY") ?? "";
 const CACHE_TTL_HOURS = 24 * 7;
@@ -170,6 +165,7 @@ async function generatePersonalization(
 }
 
 serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   const rl = await checkRateLimit(clientKey(req, "research-personalize"), {

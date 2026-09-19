@@ -8,6 +8,7 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { serviceClient } from "../_shared/supabase.ts";
 import { checkRateLimit, clientKey } from "../_shared/rate-limit.ts";
 import { similarity } from "../_shared/algorithms.ts";
+import { getCorsHeaders } from "../_shared/cors.ts";
 import {
   crossSourceCorroboration,
   detectChangePoint,
@@ -19,12 +20,6 @@ import {
   analyzeGaps,
   type ResearchClaim,
 } from "../_shared/research-algorithms.ts";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-};
 
 const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY") ?? "";
 const CACHE_TTL_HOURS = 24 * 7; // 7 days — trends move weekly, not hourly
@@ -163,6 +158,7 @@ function starterCap(report: Record<string, unknown>): Record<string, unknown> {
 }
 
 serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   const rl = await checkRateLimit(clientKey(req, "research-analysis"), {

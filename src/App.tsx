@@ -11,6 +11,7 @@ import { ThemeProvider, ThemeRouteScope } from "@/contexts/ThemeContext";
 import { SubscriptionProvider } from "@/contexts/SubscriptionContext";
 import { WorkspaceProvider } from "@/contexts/WorkspaceContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { AdminRoute } from "@/components/AdminRoute";
 import { ErrorFallback } from "@/components/ErrorFallback";
 import { usePageTracking } from "@/lib/analytics";
 import { lazy, Suspense, Component, ReactNode } from "react";
@@ -152,8 +153,8 @@ const App = () => (
                   <Route path="/demo" element={<Demo />} />
                   <Route path="/auth/confirm" element={<AuthConfirm />} />
                   <Route path="/unsubscribe" element={<Unsubscribe />} />
-                  <Route path="/admin/messages" element={<ProtectedRoute><AdminMessages /></ProtectedRoute>} />
-                  <Route path="/admin/prediction-accuracy" element={<ProtectedRoute><AdminPredictionAccuracy /></ProtectedRoute>} />
+                  <Route path="/admin/messages" element={<AdminRoute><AdminMessages /></AdminRoute>} />
+                  <Route path="/admin/prediction-accuracy" element={<AdminRoute><AdminPredictionAccuracy /></AdminRoute>} />
                   <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
                   <Route path="/r/:token" element={<PublicReport />} />
                   <Route path="/accept-workspace-invite/:token" element={<AcceptWorkspaceInvite />} />
@@ -162,9 +163,9 @@ const App = () => (
                   <Route
                     path="/health"
                     element={
-                      <ProtectedRoute>
+                      <AdminRoute>
                         <HealthCheck />
-                      </ProtectedRoute>
+                      </AdminRoute>
                     }
                   />
                   

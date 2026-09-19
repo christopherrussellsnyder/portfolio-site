@@ -1,10 +1,11 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
-import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
+import { getCorsHeaders } from '../_shared/cors.ts';
 
 // Captures real-world outcomes for strategy posts whose scheduled date is 48h-14d old.
 // - Users with an active Meta connection: pulls real ad performance (source='meta_api')
 // - Everyone else: creates a pending row so the UI can ask "how did this actually perform?"
 Deno.serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;

@@ -11,11 +11,7 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { serviceClient } from "../_shared/supabase.ts";
 import { encryptToken } from "../_shared/meta-crypto.ts";
 import { checkRateLimit, clientKey } from "../_shared/rate-limit.ts";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { getCorsHeaders } from "../_shared/cors.ts";
 
 const GRAPH = "https://graph.facebook.com/v19.0";
 const SCOPES = ["ads_read", "read_insights", "business_management"].join(",");
@@ -37,6 +33,7 @@ function appRedirect(to: string | null, params: Record<string, string>): Respons
 }
 
 serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   const rl = await checkRateLimit(clientKey(req, "meta-oauth"), { limit: 30, windowMs: 60_000 });
