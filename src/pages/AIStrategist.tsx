@@ -201,10 +201,6 @@ export default function AIStrategist() {
     }
   };
 
-  const handleFavorite = (id: string) => {
-    toast.info('Favorite feature coming soon!');
-  };
-
   const handleContextUpdate = () => {
     queryClient.invalidateQueries({ queryKey: ['business-context'] });
     queryClient.invalidateQueries({ queryKey: ['recent-analytics'] });
@@ -241,7 +237,6 @@ export default function AIStrategist() {
           onNewChat={handleNewConversation}
           onDelete={handleDeleteRequest}
           onRename={handleRename}
-          onFavorite={handleFavorite}
         />
 
         {/* Main Chat Area */}

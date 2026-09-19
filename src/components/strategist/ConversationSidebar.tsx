@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, MessageSquare, ChevronLeft, ChevronRight, MoreVertical, Trash2, Pencil, Star } from 'lucide-react';
+import { Plus, MessageSquare, ChevronLeft, ChevronRight, MoreVertical, Trash2, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
@@ -24,7 +24,6 @@ interface ConversationSidebarProps {
   onNewChat: () => void;
   onDelete: (id: string) => void;
   onRename?: (id: string, newTitle: string) => void;
-  onFavorite?: (id: string) => void;
 }
 
 export function ConversationSidebar({
@@ -37,7 +36,6 @@ export function ConversationSidebar({
   onNewChat,
   onDelete,
   onRename,
-  onFavorite,
 }: ConversationSidebarProps) {
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
@@ -125,15 +123,6 @@ export function ConversationSidebar({
                         </button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="start" sideOffset={4} className="z-[200]">
-                        <DropdownMenuItem
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (onFavorite) onFavorite(conv.id);
-                          }}
-                        >
-                          <Star className="w-4 h-4" />
-                          Favorite
-                        </DropdownMenuItem>
                         <DropdownMenuItem
                           onClick={(e) => {
                             e.stopPropagation();
