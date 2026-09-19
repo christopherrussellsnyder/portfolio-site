@@ -14,13 +14,14 @@ export async function parseJsonBody<T>(req: Request, schema: ZodSchema<T>): Prom
   try {
     raw = await req.json();
   } catch {
-    return { ok: false, response: jsonResponse({ error: "Invalid JSON body" }, 400) };
+    return { ok: false, response: jsonResponse(req, { error: "Invalid JSON body" }, 400) };
   }
   const parsed = schema.safeParse(raw);
   if (!parsed.success) {
     return {
       ok: false,
       response: jsonResponse(
+        req,
         { error: "Validation failed", details: (parsed.error as ZodError).flatten().fieldErrors },
         400,
       ),

@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@18.5.0";
 import { serviceClient } from "../_shared/supabase.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { checkRateLimit, clientKey } from "../_shared/rate-limit.ts";
 
 const PRODUCT_TO_TIER: Record<string, string> = {
   // Current live products
@@ -24,6 +25,14 @@ serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
+  }
+
+  const rl = await checkRateLimit(clientKey(req, "check-subscription"), { limit: 30, windowMs: 60_000 });
+  if (!rl.ok) {
+    return new Response(JSON.stringify({ error: "Too many requests. Please wait a moment." }), {
+      status: 429,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 
   const supabaseClient = serviceClient();

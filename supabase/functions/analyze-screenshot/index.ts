@@ -179,6 +179,22 @@ serve(async (req) => {
     return new Response('ok', { headers: corsHeaders });
   }
 
+  // This endpoint writes uploaded_analytics rows keyed by userId — authenticate
+  // the caller and only ever trust our own verified id, never a client-supplied one.
+  const authHeader = req.headers.get('Authorization');
+  if (!authHeader?.startsWith('Bearer ')) {
+    return new Response(JSON.stringify({ error: 'Authentication required' }),
+      { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+  }
+  const { data: authData, error: authErr } = await serviceClient().auth.getUser(
+    authHeader.replace('Bearer ', ''),
+  );
+  if (authErr || !authData.user) {
+    return new Response(JSON.stringify({ error: 'Invalid session' }),
+      { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+  }
+  const userId = authData.user.id;
+
   const rl = await checkRateLimit(clientKey(req, "analyze-screenshot"), { limit: 15, windowMs: 60000 });
   if (!rl.ok) {
     return new Response(JSON.stringify({ error: "Too many requests. Please slow down." }), {
@@ -198,12 +214,7 @@ serve(async (req) => {
     }
 
     const body = await req.json();
-    const { imageBase64, userId, workspace_id: bodyWorkspaceId, screenshotUrl, imageUrl, textData, fileType, fileFormat, fileName, fileSize, contentType } = body;
-
-    if (!userId) {
-      return new Response(JSON.stringify({ error: 'userId is required' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-    }
+    const { imageBase64, workspace_id: bodyWorkspaceId, screenshotUrl, imageUrl, textData, fileType, fileFormat, fileName, fileSize, contentType } = body;
 
     const detectedFormat = fileFormat || (textData ? 'text' : 'image');
     console.log('Analyzing file for user:', userId, 'format:', detectedFormat, 'fileName:', fileName);

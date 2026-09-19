@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { serviceClient } from "../_shared/supabase.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { checkRateLimit, clientKey } from "../_shared/rate-limit.ts";
 
 serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
@@ -8,17 +9,33 @@ serve(async (req) => {
     return new Response('ok', { headers: corsHeaders });
   }
 
+  const rl = await checkRateLimit(clientKey(req, "analyze-user-intelligence"), { limit: 20, windowMs: 60_000 });
+  if (!rl.ok) {
+    return new Response(JSON.stringify({ error: "Too many requests. Please slow down." }), {
+      status: 429,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
   try {
-    const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
-    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-
-    const { userId } = await req.json();
-    if (!userId) {
-      return new Response(JSON.stringify({ error: 'userId is required' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-    }
-
     const supabase = serviceClient();
+
+    // Authenticate the caller and use their own id — never trust a client-supplied
+    // userId here, since this endpoint returns the target user's full business,
+    // behavior, analytics and strategy data.
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return new Response(JSON.stringify({ error: 'Authentication required' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+    const { data: userData, error: authError } = await supabase.auth.getUser(
+      authHeader.replace('Bearer ', ''),
+    );
+    if (authError || !userData.user) {
+      return new Response(JSON.stringify({ error: 'Invalid session' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+    const userId = userData.user.id;
 
     // Parallel fetch all intelligence data
     const [

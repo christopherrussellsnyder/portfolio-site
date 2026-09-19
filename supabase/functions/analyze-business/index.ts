@@ -331,11 +331,28 @@ serve(async (req) => {
   }
 
   try {
-    const { scrapedContent, userId, workspace_id: bodyWorkspaceId } = await req.json() as { scrapedContent: ScrapedContent; userId: string; workspace_id?: string | null };
-    
-    if (!scrapedContent || !userId) {
+    // Authenticate the caller and only ever trust our own verified id — this
+    // endpoint overwrites the caller's business_context, so a client-supplied
+    // userId would let anyone overwrite anyone else's business profile.
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return new Response(JSON.stringify({ error: 'Authentication required' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+    const { data: authData, error: authErr } = await serviceClient().auth.getUser(
+      authHeader.replace('Bearer ', ''),
+    );
+    if (authErr || !authData.user) {
+      return new Response(JSON.stringify({ error: 'Invalid session' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+    const userId = authData.user.id;
+
+    const { scrapedContent, workspace_id: bodyWorkspaceId } = await req.json() as { scrapedContent: ScrapedContent; workspace_id?: string | null };
+
+    if (!scrapedContent) {
       return new Response(
-        JSON.stringify({ error: 'Scraped content and user ID are required' }),
+        JSON.stringify({ error: 'Scraped content is required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }

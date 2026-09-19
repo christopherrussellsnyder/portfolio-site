@@ -97,9 +97,11 @@ export function useWebsiteAnalysis() {
       if (!user) {
         throw new Error('Please sign in to analyze websites');
       }
+      const { data: { session } } = await supabase.auth.getSession();
+      const authToken = session?.access_token ?? import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
       // Step 1: Scrape website
-      
+
       setProgress(20);
 
       const scrapeResponse = await fetch(
@@ -108,9 +110,9 @@ export function useWebsiteAnalysis() {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+            'Authorization': `Bearer ${authToken}`,
           },
-          body: JSON.stringify({ websiteUrl, userId: user.id, workspace_id: activeWorkspaceId }),
+          body: JSON.stringify({ websiteUrl, workspace_id: activeWorkspaceId }),
         }
       );
 
@@ -136,11 +138,10 @@ export function useWebsiteAnalysis() {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+            'Authorization': `Bearer ${authToken}`,
           },
-          body: JSON.stringify({ 
-            scrapedContent: scrapeResult.data, 
-            userId: user.id,
+          body: JSON.stringify({
+            scrapedContent: scrapeResult.data,
             workspace_id: activeWorkspaceId,
           }),
         }
