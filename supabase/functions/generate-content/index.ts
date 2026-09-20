@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { serviceClient } from "../_shared/supabase.ts";
 import { checkRateLimit, clientKey } from "../_shared/rate-limit.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { callLovableGateway } from "../_shared/llm-gateway.ts";
 
 serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
@@ -34,19 +35,12 @@ serve(async (req) => {
     const startTime = Date.now();
 
     // Call Lovable AI Gateway
-    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: `Generate 3 different variations of ${contentType} content for the following topic/product: ${prompt}` }
-        ],
-      })
+    const response = await callLovableGateway(LOVABLE_API_KEY, {
+      model: 'google/gemini-2.5-flash',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: `Generate 3 different variations of ${contentType} content for the following topic/product: ${prompt}` }
+      ],
     });
 
     if (!response.ok) {

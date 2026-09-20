@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { serviceClient } from "../_shared/supabase.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { callLovableGateway } from "../_shared/llm-gateway.ts";
 
 serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
@@ -132,13 +133,7 @@ serve(async (req) => {
 
     console.log('Calling AI with comprehensive context, length:', strategyContext.length);
 
-    const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
+    const aiResponse = await callLovableGateway(LOVABLE_API_KEY, {
         model: 'google/gemini-2.5-flash',
         messages: [
           {
@@ -254,7 +249,6 @@ Be specific, creative, and actionable. Use the business context to personalize e
           }
         ],
         tool_choice: { type: 'function', function: { name: 'generate_campaign_strategy' } }
-      }),
     });
 
     if (!aiResponse.ok) {

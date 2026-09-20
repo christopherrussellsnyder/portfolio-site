@@ -23,6 +23,7 @@ import {
 import { checkRateLimit, clientKey } from "../_shared/rate-limit.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { isFounderEmail } from "../_shared/founder.ts";
+import { callLovableGateway } from "../_shared/llm-gateway.ts";
 
 interface StrategyRequest {
   platform: string;
@@ -297,21 +298,14 @@ async function callAI(
   maxTokens: number = 16000,
   model: string = MODEL_CREATIVE,
 ): Promise<string> {
-  const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: prompt },
-      ],
-      temperature: 0.75,
-      max_tokens: maxTokens,
-    }),
+  const response = await callLovableGateway(apiKey, {
+    model,
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: prompt },
+    ],
+    temperature: 0.75,
+    max_tokens: maxTokens,
   });
 
   if (!response.ok) {

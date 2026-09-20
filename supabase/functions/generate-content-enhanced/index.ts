@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { serviceClient } from "../_shared/supabase.ts";
 import { scoreCaption, selectDiverseCaptions } from "../_shared/algorithms.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { callLovableGateway } from "../_shared/llm-gateway.ts";
 
 serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
@@ -102,19 +103,12 @@ serve(async (req) => {
       
       if (LOVABLE_API_KEY) {
         try {
-          const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              model: 'google/gemini-2.5-flash',
-              messages: [
-                { role: 'system', content: systemPrompt + '\n\nSTRATEGY: ' + strategy },
-                { role: 'user', content: prompt }
-              ],
-            })
+          const response = await callLovableGateway(LOVABLE_API_KEY, {
+            model: 'google/gemini-2.5-flash',
+            messages: [
+              { role: 'system', content: systemPrompt + '\n\nSTRATEGY: ' + strategy },
+              { role: 'user', content: prompt }
+            ],
           });
           
           if (!response.ok) {
