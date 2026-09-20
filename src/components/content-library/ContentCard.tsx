@@ -61,6 +61,7 @@ export default function ContentCard({ item, onView, onEdit, onDuplicate, onDelet
           </div>
           <button
             onClick={(e) => { e.stopPropagation(); onToggleFavorite(); }}
+            aria-label={item.is_favorite ? 'Remove from favorites' : 'Add to favorites'}
             className="p-1 hover:bg-secondary rounded-lg transition-colors"
           >
             <Star className={`h-4 w-4 ${item.is_favorite ? 'fill-amber-500 text-amber-500' : 'text-muted-foreground'}`} />

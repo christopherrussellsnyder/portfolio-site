@@ -953,6 +953,7 @@ I'll use this context to provide personalized marketing recommendations. You can
               <Button
                 onClick={() => sendMessage()}
                 disabled={!input.trim() || isDisabled}
+                aria-label="Send message"
                 size="icon"
                 className="h-9 w-9 rounded-xl flex-shrink-0 bg-gradient-to-br from-primary to-arasaka-red-dark hover:shadow-glow transition-all duration-300"
               >
