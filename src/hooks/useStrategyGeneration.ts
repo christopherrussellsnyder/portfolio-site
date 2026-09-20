@@ -55,6 +55,33 @@ export interface PredictedMetrics {
   expected_conversions?: number;
 }
 
+export interface EvidenceSignal {
+  text: string;
+  source: string;
+  source_type: 'first_party' | 'real_api' | 'ai_estimated';
+  weight: number;
+  corroboration: number;
+}
+
+export interface EvidenceContradiction {
+  subject: string;
+  kind: 'numeric_conflict' | 'directional_conflict';
+  resolution: string;
+}
+
+export interface EvidenceSummary {
+  confidence: number;
+  confidence_label: 'High' | 'Medium' | 'Low';
+  confidence_basis: string;
+  signals: number;
+  duplicates_collapsed: number;
+  contradictions: number;
+  composition: { first_party: number; real_api: number; ai_estimated: number };
+  sources: string[];
+  contradictions_detail: EvidenceContradiction[];
+  top_signals: EvidenceSignal[];
+}
+
 export interface StrategyOverview {
   id: string;
   title: string;
@@ -78,6 +105,7 @@ export interface StrategyOverview {
   theme_distribution?: Record<string, number> | null;
   recommended_campaign_structure?: Record<string, any> | null;
   version?: number;
+  evidence_summary?: EvidenceSummary | null;
 }
 
 export interface HashtagMix {
@@ -327,6 +355,7 @@ export function useStrategyGeneration() {
         post_type_distribution: strategy.post_type_distribution as Record<string, number> | null,
         theme_distribution: strategy.theme_distribution as Record<string, number> | null,
         recommended_campaign_structure: (strategy as any).recommended_campaign_structure as Record<string, any> | null,
+        evidence_summary: (strategy as any).evidence_summary as EvidenceSummary | null,
       } as StrategyOverview,
       posts: posts.map(post => ({
         ...post,

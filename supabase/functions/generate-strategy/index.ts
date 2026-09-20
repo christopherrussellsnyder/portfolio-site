@@ -1101,6 +1101,33 @@ serve(async (req) => {
     console.log('Grounding sources active:', groundingSources.join(', ') || 'none (profile only)');
     console.log(`Grounding size: full ${groundingSection.length} chars → digest ${groundingDigest.length} chars`);
 
+    // Bounded, persistable summary of the evidence ledger — same object saved
+    // to content_strategies.evidence_summary and returned in the response, so
+    // "why did it recommend this?" is answerable from the saved strategy later,
+    // not only visible in server logs during the run.
+    const evidenceSummary = {
+      confidence: evidence.confidence,
+      confidence_label: evidence.confidenceLabel,
+      confidence_basis: evidence.confidenceBasis,
+      signals: evidence.signals.length,
+      duplicates_collapsed: evidence.duplicatesCollapsed,
+      contradictions: evidence.contradictions.length,
+      composition: evidence.composition,
+      sources: groundingSources,
+      contradictions_detail: evidence.contradictions.slice(0, 6).map((c) => ({
+        subject: c.subject,
+        kind: c.kind,
+        resolution: c.resolution,
+      })),
+      top_signals: evidence.signals.slice(0, 12).map((s) => ({
+        text: s.text.slice(0, 220),
+        source: s.source,
+        source_type: s.sourceType,
+        weight: Math.round(s.weight * 100) / 100,
+        corroboration: s.corroboration,
+      })),
+    };
+
     // Measured predicted-vs-actual calibration for this niche. Fetched BEFORE
     // generation so real outcomes steer candidate selection and the batch
     // pre-screen — not only the after-the-fact review.
@@ -1354,6 +1381,7 @@ serve(async (req) => {
         predicted_impressions: predictedMetrics.total_impressions,
         predicted_website_clicks: predictedMetrics.expected_website_clicks,
         predicted_conversions: predictedMetrics.expected_conversions,
+        evidence_summary: evidenceSummary,
         version: 1,
       })
       .select()
@@ -1444,7 +1472,7 @@ serve(async (req) => {
       JSON.stringify({
         success: true,
         strategyId: savedStrategy.id,
-        strategy: { ...overview, id: savedStrategy.id },
+        strategy: { ...overview, id: savedStrategy.id, evidence_summary: evidenceSummary },
         weeklyBreakdown: weeklyBreakdown,
         postsCount: allPosts.length,
         // Diagnostics: every field below is computed from real gathered evidence
@@ -1455,16 +1483,7 @@ serve(async (req) => {
           flagged_posts: finalScore.flaggedPosts.length,
           overview_selection: overviewSelection || null,
         },
-        evidence: {
-          confidence: evidence.confidence,
-          confidence_label: evidence.confidenceLabel,
-          confidence_basis: evidence.confidenceBasis,
-          signals: evidence.signals.length,
-          duplicates_collapsed: evidence.duplicatesCollapsed,
-          contradictions: evidence.contradictions.length,
-          composition: evidence.composition,
-          sources: groundingSources,
-        },
+        evidence: evidenceSummary,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
