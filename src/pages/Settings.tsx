@@ -13,8 +13,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Slider } from '@/components/ui/slider';
-import { 
-  User, Palette, Bell, Settings as SettingsIcon, 
+import { Progress } from '@/components/ui/progress';
+import {
+  User, Palette, Bell, Settings as SettingsIcon,
   CreditCard, Info, Loader2, Save, ArrowLeft,
   Upload, Globe, Sparkles, RefreshCw, Building2
 } from 'lucide-react';
@@ -26,6 +27,10 @@ import { TwoFactorSection } from '@/components/settings/TwoFactorSection';
 import { AdAccountsSection } from '@/components/settings/AdAccountsSection';
 import { Users, Megaphone } from 'lucide-react';
 import { KorexMark } from '@/components/branding/KorexMark';
+import { useSubscription } from '@/contexts/SubscriptionContext';
+import { useWorkspace } from '@/contexts/WorkspaceContext';
+import { useAdActors } from '@/hooks/useVideoAds';
+import { STARTER_STRATEGY_LIMIT } from '@/config/stripe.config';
 
 type SettingsTab = 'profile' | 'workspaces' | 'team' | 'brandkit' | 'business' | 'ai' | 'ads' | 'notifications' | 'billing' | 'about';
 
@@ -48,12 +53,17 @@ const Settings: React.FC = () => {
   const [searchParams] = useSearchParams();
   const { user, signOut } = useAuth();
   const { toast } = useToast();
-  
+  const { tier, subscribed, subscription_end, planLabel, strategiesUsed, isLoading: subLoading } = useSubscription();
+  const { workspaces, workspaceLimit } = useWorkspace();
+  const { data: actorsData } = useAdActors();
+  const videoQuota = actorsData?.quota;
+
   const initialTab = (searchParams.get('tab') as SettingsTab) || 'profile';
   const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab);
   const [isSaving, setIsSaving] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [isLoadingSettings, setIsLoadingSettings] = useState(true);
+  const [openingPortal, setOpeningPortal] = useState(false);
   
   const photoInputRef = useRef<HTMLInputElement>(null);
   
@@ -479,29 +489,99 @@ const Settings: React.FC = () => {
     </div>
   );
 
-  const renderBillingTab = () => (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-xl font-semibold text-foreground mb-1">Billing</h2>
-        <p className="text-sm text-muted-foreground">Manage your subscription and billing</p>
+  const handleManageBilling = async () => {
+    setOpeningPortal(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('customer-portal');
+      if (error) throw error;
+      if (data?.url) window.open(data.url, '_blank');
+    } catch {
+      toast({
+        title: 'Could not open billing portal',
+        description: 'Please try again in a moment.',
+        variant: 'destructive',
+      });
+    } finally {
+      setOpeningPortal(false);
+    }
+  };
+
+  const renderUsageBar = (label: string, used: number, limit: number | null, unit = '') => {
+    const unlimited = limit === null || !Number.isFinite(limit);
+    const pct = unlimited ? 0 : Math.min(100, (used / Math.max(limit, 1)) * 100);
+    return (
+      <div className="space-y-1.5">
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-foreground">{label}</span>
+          <span className="text-muted-foreground">
+            {unlimited ? `${used}${unit} used · Unlimited` : `${used} / ${limit}${unit}`}
+          </span>
+        </div>
+        {!unlimited && <Progress value={pct} className="h-2" />}
       </div>
-      
-      <Card className="bg-card border-border">
-        <CardHeader>
-          <CardTitle className="text-base">Current Plan</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-between">
-            <div>
-              <Badge className="bg-primary text-primary-foreground font-semibold mb-2">Free Plan</Badge>
-              <p className="text-sm text-muted-foreground">Basic features included</p>
-            </div>
-            <Button>Upgrade Plan</Button>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  );
+    );
+  };
+
+  const renderBillingTab = () => {
+    const isFounder = tier === 'founder';
+    const strategiesLimit = subscribed || isFounder ? null : STARTER_STRATEGY_LIMIT;
+
+    return (
+      <div className="space-y-6">
+        <div>
+          <h2 className="text-xl font-semibold text-foreground mb-1">Billing</h2>
+          <p className="text-sm text-muted-foreground">Manage your subscription and billing</p>
+        </div>
+
+        <Card className="bg-card border-border">
+          <CardHeader>
+            <CardTitle className="text-base">Current Plan</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {subLoading ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="w-4 h-4 animate-spin" /> Loading plan…
+              </div>
+            ) : (
+              <div className="flex items-center justify-between flex-wrap gap-3">
+                <div>
+                  <Badge className="bg-primary text-primary-foreground font-semibold mb-2">{planLabel}</Badge>
+                  <p className="text-sm text-muted-foreground">
+                    {isFounder
+                      ? 'Founder account — full access to every feature.'
+                      : subscribed && subscription_end
+                        ? `Renews ${new Date(subscription_end).toLocaleDateString()}`
+                        : 'Upgrade for unlimited strategies and more video ads.'}
+                  </p>
+                </div>
+                {subscribed ? (
+                  <Button variant="outline" onClick={handleManageBilling} disabled={openingPortal}>
+                    {openingPortal ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+                    Manage billing
+                  </Button>
+                ) : !isFounder ? (
+                  <Button onClick={() => navigate('/pricing')}>Upgrade Plan</Button>
+                ) : null}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="bg-card border-border">
+          <CardHeader>
+            <CardTitle className="text-base">Usage this period</CardTitle>
+            <CardDescription>What you've used against your plan's limits</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            {strategiesLimit !== null &&
+              renderUsageBar('Strategies generated (lifetime trial)', strategiesUsed, strategiesLimit)}
+            {videoQuota && renderUsageBar('AI video ads this month', videoQuota.used, videoQuota.limit)}
+            {renderUsageBar('Workspaces', workspaces.length, Number.isFinite(workspaceLimit) ? workspaceLimit : null)}
+          </CardContent>
+        </Card>
+      </div>
+    );
+  };
 
   const renderAboutTab = () => (
     <div className="space-y-6">
