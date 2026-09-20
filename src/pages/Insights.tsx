@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
+import { Skeleton } from '@/components/ui/skeleton';
 import { 
   ArrowLeft, Upload, ChevronRight, Image, Loader2,
   FileText, Table, FileCode, Code, FileSpreadsheet, File
@@ -380,8 +381,34 @@ export default function Insights() {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {isLoading ? (
-          <div className="flex items-center justify-center py-20">
-            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6" aria-busy="true" aria-label="Loading analytics">
+            <div className="lg:col-span-1 space-y-4">
+              <div className="flex items-center justify-between">
+                <Skeleton className="h-6 w-32" />
+                <Skeleton className="h-5 w-16" />
+              </div>
+              <div className="space-y-3">
+                {[0, 1, 2, 3].map((i) => (
+                  <Card key={i}>
+                    <CardContent className="p-4">
+                      <div className="flex items-start gap-3">
+                        <Skeleton className="w-12 h-12 rounded-lg flex-shrink-0" />
+                        <div className="flex-1 space-y-2">
+                          <Skeleton className="h-4 w-20" />
+                          <Skeleton className="h-3 w-full" />
+                          <Skeleton className="h-3 w-2/3" />
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </div>
+            <div className="lg:col-span-3 space-y-4">
+              <Skeleton className="h-8 w-64" />
+              <Skeleton className="h-40 w-full" />
+              <Skeleton className="h-40 w-full" />
+            </div>
           </div>
         ) : uploads.length === 0 ? (
           <div className="text-center py-20">
