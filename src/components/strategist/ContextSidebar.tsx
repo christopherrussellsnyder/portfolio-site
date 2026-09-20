@@ -11,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { formatDistanceToNow } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { BusinessContext, AnalyticsUpload } from '@/pages/AIStrategist';
+import { PredictionAccuracyCard } from './PredictionAccuracyCard';
 
 interface ContextSidebarProps {
   businessContext: BusinessContext | null | undefined;
@@ -138,6 +139,9 @@ export function ContextSidebar({
                   </CardContent>
                 </Card>
               )}
+
+              {/* Prediction Accuracy Section */}
+              {profile?.industry && <PredictionAccuracyCard niche={profile.industry} />}
 
               {/* Recent Analytics Section */}
               <Card className="bg-background">
