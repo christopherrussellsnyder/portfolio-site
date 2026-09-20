@@ -11,7 +11,6 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 
-const FOUNDER_EMAIL = 'chrissnyder3456@gmail.com';
 const SEAT_LIMIT = 10;
 
 interface Member {
@@ -35,8 +34,7 @@ export function TeamMembersSection() {
   const { user } = useAuth();
   const { activeWorkspace, activeWorkspaceId } = useWorkspace();
   const { tier, subscribed } = useSubscription();
-  const isFounder = user?.email?.toLowerCase() === FOUNDER_EMAIL;
-  const isAgency = isFounder || (subscribed && tier === 'agency');
+  const isAgency = tier === 'founder' || (subscribed && tier === 'agency');
 
   const [members, setMembers] = useState<Member[]>([]);
   const [invitations, setInvitations] = useState<Invitation[]>([]);

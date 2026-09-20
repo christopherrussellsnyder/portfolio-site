@@ -7,11 +7,11 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { serviceClient } from "../_shared/supabase.ts";
 import { checkRateLimit, clientKey } from "../_shared/rate-limit.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { isFounderEmail } from "../_shared/founder.ts";
 
 const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY") ?? "";
 const CACHE_TTL_HOURS = 24 * 7;
 const FORCE_REFRESH_COOLDOWN_HOURS = 12;
-const FOUNDER_EMAILS = new Set(["chrissnyder3456@gmail.com"]);
 
 type ContentMode = "organic" | "paid" | "hybrid";
 
@@ -210,7 +210,7 @@ serve(async (req) => {
       .select("status, plan_type")
       .eq("user_id", user.id)
       .maybeSingle();
-    const isFounder = FOUNDER_EMAILS.has(user.email || "");
+    const isFounder = isFounderEmail(user.email);
     const isPaid =
       isFounder ||
       (sub?.status === "active" && (sub.plan_type === "pro" || sub.plan_type === "agency"));

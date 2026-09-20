@@ -22,6 +22,7 @@ import {
 } from "../_shared/algorithms.ts";
 import { checkRateLimit, clientKey } from "../_shared/rate-limit.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { isFounderEmail } from "../_shared/founder.ts";
 
 interface StrategyRequest {
   platform: string;
@@ -796,8 +797,7 @@ serve(async (req) => {
       .eq('user_id', user.id)
       .maybeSingle();
     const isPaid = localSub?.status === 'active' && (localSub.plan_type === 'pro' || localSub.plan_type === 'agency');
-    const FOUNDER_EMAILS = new Set(['chrissnyder3456@gmail.com']);
-    const isFounder = !!user.email && FOUNDER_EMAILS.has(user.email.toLowerCase());
+    const isFounder = isFounderEmail(user.email);
     if (!isPaid && !isFounder) {
       const { data: usageRow } = await supabase
         .from('usage_tracking')

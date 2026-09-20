@@ -9,6 +9,7 @@ import { serviceClient } from "../_shared/supabase.ts";
 import { checkRateLimit, clientKey } from "../_shared/rate-limit.ts";
 import { similarity } from "../_shared/algorithms.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { isFounderEmail } from "../_shared/founder.ts";
 import {
   crossSourceCorroboration,
   detectChangePoint,
@@ -24,7 +25,6 @@ import {
 const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY") ?? "";
 const CACHE_TTL_HOURS = 24 * 7; // 7 days — trends move weekly, not hourly
 const FORCE_REFRESH_COOLDOWN_HOURS = 12; // per platform+mode+industry, non-founder
-const FOUNDER_EMAILS = new Set(["chrissnyder3456@gmail.com"]);
 
 type ContentMode = "organic" | "paid" | "hybrid";
 
@@ -202,7 +202,7 @@ serve(async (req) => {
       .select("status, plan_type")
       .eq("user_id", user.id)
       .maybeSingle();
-    const isFounder = FOUNDER_EMAILS.has(user.email || "");
+    const isFounder = isFounderEmail(user.email);
     const isPaid =
       isFounder ||
       (sub?.status === "active" && (sub.plan_type === "pro" || sub.plan_type === "agency"));

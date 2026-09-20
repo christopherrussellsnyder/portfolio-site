@@ -24,8 +24,6 @@ interface BrandKit {
   footer_note: string | null;
 }
 
-const FOUNDER_EMAIL = 'chrissnyder3456@gmail.com';
-
 export function BrandKitSection() {
   const { activeWorkspace } = useWorkspace();
   const { tier, subscribed } = useSubscription();
@@ -36,8 +34,7 @@ export function BrandKitSection() {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
 
-  const isFounder = user?.email?.toLowerCase() === FOUNDER_EMAIL;
-  const isAgency = isFounder || (subscribed && tier === 'agency');
+  const isAgency = tier === 'founder' || (subscribed && tier === 'agency');
 
   useEffect(() => {
     if (!activeWorkspace?.id || !isAgency) { setLoading(false); return; }

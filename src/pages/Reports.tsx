@@ -14,8 +14,6 @@ import { Switch } from '@/components/ui/switch';
 import { Copy, ExternalLink, FileText, Lock, Loader2, Plus, Trash2, ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
 
-const FOUNDER_EMAIL = 'chrissnyder3456@gmail.com';
-
 interface Report {
   id: string;
   title: string;
@@ -44,8 +42,7 @@ export default function ReportsPage() {
   const [start, setStart] = useState(monthAgo);
   const [end, setEnd] = useState(today);
 
-  const isFounder = user?.email?.toLowerCase() === FOUNDER_EMAIL;
-  const isAgency = isFounder || (subscribed && tier === 'agency');
+  const isAgency = tier === 'founder' || (subscribed && tier === 'agency');
 
   const load = async () => {
     if (!activeWorkspaceId) return;
