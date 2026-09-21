@@ -32,6 +32,7 @@ import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { useStrategyGeneration, StrategyPost, StrategyOverview } from '@/hooks/useStrategyGeneration';
 import { StrategyOverviewCard } from '@/components/strategy/StrategyOverviewCard';
 import { CampaignStructureCard } from '@/components/strategy/CampaignStructureCard';
+import { SchedulerIntelligenceCard } from '@/components/strategy/SchedulerIntelligenceCard';
 import { StrategyPostCard } from '@/components/strategy/StrategyPostCard';
 import { OutcomeTrackingPanel } from '@/components/strategy/OutcomeTrackingPanel';
 import { StrategyCalendarView } from '@/components/strategy/StrategyCalendarView';
@@ -189,6 +190,7 @@ export default function ContentStrategies() {
                     data={selectedStrategy.strategy.recommended_campaign_structure}
                     platform={selectedStrategy.strategy.platform}
                   />
+                  <SchedulerIntelligenceCard platform={selectedStrategy.strategy.platform} />
                 </div>
               </div>
 
