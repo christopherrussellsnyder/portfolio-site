@@ -33,6 +33,7 @@ const Research = lazy(() => import("./pages/Research"));
 const ContentGeneration = lazy(() => import("./pages/ContentGeneration"));
 const ABTesting = lazy(() => import("./pages/ABTesting"));
 const Analytics = lazy(() => import("./pages/Analytics"));
+const Automation = lazy(() => import("./pages/Automation"));
 
 
 const HealthCheck = lazy(() => import("./pages/HealthCheck"));
@@ -265,6 +266,14 @@ const App = () => (
                     element={
                       <ProtectedRoute>
                         <Analytics />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/automation"
+                    element={
+                      <ProtectedRoute>
+                        <Automation />
                       </ProtectedRoute>
                     }
                   />
