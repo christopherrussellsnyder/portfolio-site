@@ -1,5 +1,6 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { getCorsHeaders } from '../_shared/cors.ts';
+import { callLovableGateway } from '../_shared/llm-gateway.ts';
 
 Deno.serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
@@ -141,17 +142,10 @@ Top posts: ${topPosts.map((p: any) => `"${p.content.slice(0, 80)}" (${p.engageme
 
 Structure the response as JSON: { "executive_summary": "...", "what_worked": "...", "opportunities": "...", "next_steps": "..." }. Keep each section 2-3 sentences, confident and client-facing. No emojis.`;
 
-          const resp = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Lovable-API-Key': lovableKey,
-            },
-            body: JSON.stringify({
-              model: 'google/gemini-3-flash-preview',
-              messages: [{ role: 'user', content: prompt }],
-              response_format: { type: 'json_object' },
-            }),
+          const resp = await callLovableGateway(lovableKey, {
+            model: 'google/gemini-3-flash-preview',
+            messages: [{ role: 'user', content: prompt }],
+            response_format: { type: 'json_object' },
           });
           if (resp.ok) {
             const data = await resp.json();
