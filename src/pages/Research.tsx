@@ -69,6 +69,8 @@ interface ResearchReport {
   pitfalls_to_avoid?: string[];
   data_source_type?: DataSourceType;
   data_source_note?: string;
+  /** Which real external sources (e.g. "semrush:us", "meta-ad-library", "reddit") actually grounded this report. */
+  grounding_sources?: string[];
   _starter_capped?: boolean;
 }
 

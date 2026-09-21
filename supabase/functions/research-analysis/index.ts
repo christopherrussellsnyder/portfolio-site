@@ -22,6 +22,12 @@ import {
   analyzeGaps,
   type ResearchClaim,
 } from "../_shared/research-algorithms.ts";
+import {
+  fetchSearchDemand,
+  fetchCompetitorAds,
+  fetchVoiceOfCustomer,
+  type IntelResult,
+} from "../_shared/strategy-intel.ts";
 
 const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY") ?? "";
 const CACHE_TTL_HOURS = 24 * 7; // 7 days — trends move weekly, not hourly
@@ -47,7 +53,21 @@ function normalizePlatform(p: string): string {
   return s || "instagram";
 }
 
-function buildPrompt(platform: string, mode: ContentMode, industry: string) {
+/**
+ * Builds the prompt-ready block from whichever real grounding sources
+ * actually returned data this run. Empty when none did -- the model then
+ * falls back to pure prior knowledge, same as before this function existed.
+ */
+function buildGroundingBlock(sources: (IntelResult | null)[]): string {
+  const active = sources.filter((s): s is IntelResult => !!s?.ok && !!s.section);
+  if (!active.length) return "";
+  return `\n\n${active.map((s) => s.section).join("\n\n")}\n\nGROUNDING RULES (mandatory):
+- The blocks above are REAL, LIVE data -- not your training-data guesses. Where they overlap with a category you're producing (trending_hooks, top_formats, content_patterns, cta_patterns, hashtag_strategy), root your output in the actual phrasing, offers, and angles observed there instead of inventing generic ones.
+- Categories with no real data above still come from your general knowledge -- keep those phrased as estimates per the rules below.
+- Never attribute a real data point (a search volume, a specific ad, a customer quote) to a category the grounding above didn't actually cover.`;
+}
+
+function buildPrompt(platform: string, mode: ContentMode, industry: string, groundingBlock: string) {
   const modeLine =
     mode === "organic"
       ? "ORGANIC feed/profile content only (no paid ad spend)"
@@ -55,12 +75,17 @@ function buildPrompt(platform: string, mode: ContentMode, industry: string) {
       ? "PAID ad creatives only (cold-audience direct-response)"
       : "HYBRID mix of organic feed content AND paid ad creatives";
 
-  return `You are Korex Intelligence's research analyst. Produce a compact, high-signal AI-ESTIMATED research report on what is generally working on ${platform}.
+  const groundingNote = groundingBlock
+    ? "Some of this report is grounded in real, live data supplied below -- use it as instructed. Everything else remains your best-effort estimate from prior knowledge of publicly discussed patterns; never present those parts as measured, live, or platform-sourced."
+    : "You have NO live API access to " + platform + " and no access to any user's account data this run. Everything you return is an ESTIMATE derived from your prior knowledge of publicly discussed patterns. Never present a figure as measured, live, or sourced from platform data.";
 
-IMPORTANT: You have NO live API access to ${platform} and no access to any user's account data. Everything you return is an ESTIMATE derived from your prior knowledge of publicly discussed patterns. Never present a figure as measured, live, or sourced from platform data. Engagement lift figures must be phrased as estimates (e.g. "est. +30-40% vs baseline").
+  return `You are Korex Intelligence's research analyst. Produce a compact, high-signal research report on what is generally working on ${platform}.
+
+IMPORTANT: ${groundingNote} Engagement lift figures must always be phrased as estimates (e.g. "est. +30-40% vs baseline") regardless of grounding.
 
 Scope: ${modeLine}
 Industry focus: ${industry || "general (all industries)"}
+${groundingBlock}
 
 Requirements:
 - Base everything on well-known, currently-effective patterns from the last 6-12 months on ${platform}.
@@ -104,9 +129,10 @@ async function generateReport(
   platform: string,
   mode: ContentMode,
   industry: string,
+  groundingBlock: string,
 ): Promise<Record<string, unknown>> {
   if (!LOVABLE_API_KEY) throw new Error("Missing LOVABLE_API_KEY");
-  const prompt = buildPrompt(platform, mode, industry);
+  const prompt = buildPrompt(platform, mode, industry, groundingBlock);
 
   const resp = await callLovableGateway(LOVABLE_API_KEY, {
     model: "google/gemini-2.5-flash-lite", // cheapest capable model for structured JSON research
@@ -232,19 +258,45 @@ serve(async (req) => {
     let report = cached;
     let fromCache = !!cached;
 
+    // Real grounding is only worth fetching when we're about to actually
+    // generate a report -- a cache hit stays as fast as it was before this
+    // integration. Each fetcher hits its own `strategy_intel_cache` first
+    // (search demand 14d TTL, ad recon 3d, voice-of-customer 7d), so this is
+    // rarely a live external call even on the generate path.
+    let searchIntel: IntelResult | null = null;
+    let adIntel: IntelResult | null = null;
+    let vocIntel: IntelResult | null = null;
+    let groundingSources: string[] = [];
+
     if (!report) {
-      report = await generateReport(platform, mode, industry || "general");
+      const niche = industry || "general";
+      [searchIntel, adIntel, vocIntel] = await Promise.all([
+        fetchSearchDemand(supabase, niche, niche, ""),
+        fetchCompetitorAds(supabase, niche, "", platform, ""),
+        fetchVoiceOfCustomer(supabase, niche, niche),
+      ]);
+      groundingSources = [searchIntel, adIntel, vocIntel]
+        .filter((s) => s.ok)
+        .map((s) => s.source);
+      const groundingBlock = buildGroundingBlock([searchIntel, adIntel, vocIntel]);
+
+      report = await generateReport(platform, mode, niche, groundingBlock);
       report.data_source_type = "ai_estimated";
+      report.grounding_sources = groundingSources;
       const expiresAt = new Date(Date.now() + CACHE_TTL_HOURS * 3600 * 1000).toISOString();
       await supabase.from("research_insights").insert({
         platform,
         content_mode: mode,
-        industry: industry || "general",
+        industry: niche,
         data: report,
         data_source_type: "ai_estimated",
         expires_at: expiresAt,
       });
       fromCache = false;
+    } else {
+      groundingSources = Array.isArray((report as Record<string, unknown>).grounding_sources)
+        ? ((report as Record<string, unknown>).grounding_sources as string[])
+        : [];
     }
 
     // ===== First-party corroboration (per-user, deterministic, no AI cost) =====
@@ -372,6 +424,26 @@ serve(async (req) => {
       const changePoint = detectChangePoint(series);
       const trendLevel = decayWeightedMean(series, platform);
 
+      // Real-data grounding claims (only present on the run that just
+      // generated a fresh report — see the fetch above). Each bullet/quote
+      // line in a successful grounding section becomes its own claim so the
+      // corroboration layer can match individual hooks/formats against it,
+      // not just the block as a whole.
+      const groundingClaims = ({ source, section, ok }: IntelResult): ResearchClaim[] => {
+        if (!ok || !section) return [];
+        return section
+          .split("\n")
+          .map((l) => l.trim())
+          .filter((l) => l.startsWith("-") || l.startsWith('"'))
+          .map((l) => l.replace(/^-\s*/, ""))
+          .map((text) => ({
+            text,
+            source,
+            sourceType: "real_api" as const,
+            observedAt: new Date().toISOString(),
+          }));
+      };
+
       // 1 + 5 — cross-source corroboration and claim↔evidence linking
       const evidence: ResearchClaim[] = [
         ...reportClaims.map((t) => ({
@@ -388,6 +460,9 @@ serve(async (req) => {
             observedAt: r.generated_at,
           })),
         ),
+        ...(searchIntel ? groundingClaims(searchIntel) : []),
+        ...(adIntel ? groundingClaims(adIntel) : []),
+        ...(vocIntel ? groundingClaims(vocIntel) : []),
         ...measured.map((p) => ({
           text: String(p.content ?? ""),
           source: "your_published_posts",
@@ -469,8 +544,10 @@ serve(async (req) => {
     const payload = {
       ...(isPaid ? report : starterCap(report)),
       data_source_type: "ai_estimated",
-      data_source_note:
-        "AI-estimated from model priors and publicly reported patterns. Not live platform data and not measured from your account.",
+      data_source_note: groundingSources.length
+        ? `AI-synthesized, but grounded in real live data from ${groundingSources.join(", ")} where it overlapped with this report's categories. Everything else falls back to model priors and publicly reported patterns. Still not directly measured from your account.`
+        : "AI-estimated from model priors and publicly reported patterns. Live grounding sources returned nothing usable this run, so nothing below is backed by real data yet. Not measured from your account.",
+      grounding_sources: groundingSources,
       first_party_corroboration: corroboration,
       research_intelligence: intelligence,
     };
