@@ -13,10 +13,16 @@ serve(async (req) => {
   if (gate instanceof Response) return gate;
 
   try {
-    const { userId, action, competitorData, industry } = await req.json();
-    
+    // requirePro() already verified the caller's session -- gate.userId is
+    // the only trustworthy source of identity. Previously a separate,
+    // client-supplied `userId` from the body was used instead, so any
+    // authenticated Pro/Agency user could read or mutate another user's
+    // competitors and benchmarks.
+    const userId = gate.userId;
+    const { action, competitorData, industry } = await req.json();
+
     const supabase = serviceClient();
-    
+
     console.log('Competitor analysis action:', action, 'for user:', userId);
     
     if (action === 'add_competitor') {
@@ -94,11 +100,27 @@ serve(async (req) => {
     }
     
     if (action === 'analyze_competitor') {
+      // competitor_benchmarks rows join back to a user's competitive_report
+      // purely by competitor_id, with no user_id filter on the benchmark
+      // row itself -- verify the competitor actually belongs to this user
+      // before attaching a benchmark to it, or anyone could inject fake
+      // benchmark data into another user's report.
+      const { data: ownedCompetitor } = await supabase
+        .from('competitors')
+        .select('id')
+        .eq('id', competitorData.competitorId)
+        .eq('user_id', userId)
+        .maybeSingle();
+      if (!ownedCompetitor) {
+        return new Response(JSON.stringify({ error: 'Competitor not found' }),
+          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+
       const simulatedAnalysis = simulateCompetitorAnalysis(
         competitorData.competitor,
         industry
       );
-      
+
       await supabase
         .from('competitor_benchmarks')
         .insert({
