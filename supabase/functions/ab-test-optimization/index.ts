@@ -224,6 +224,58 @@ Format as JSON with keys: recommendedVariables, contentVariations, bestPractices
       );
     }
 
+    if (action === 'suggest_optimizations') {
+      // Read-only recommendations for a human to act on -- never pauses or
+      // changes anything itself. Unlike auto_optimize below (which only fires
+      // for tests explicitly opted into auto_pause_enabled), this looks at
+      // every running test so the recommendation is actually visible to
+      // users, using the test's own configured thresholds when set and sane
+      // defaults otherwise.
+      const { data: runningTests } = await supabase
+        .from('ab_tests')
+        .select(`
+          id, name, platform,
+          ab_test_variants(*),
+          auto_ab_tests(*)
+        `)
+        .eq('user_id', user.id)
+        .eq('status', 'running');
+
+      const suggestions: any[] = [];
+
+      for (const test of runningTests || []) {
+        const autoConfig = test.auto_ab_tests?.[0];
+        const minImpressions = autoConfig?.min_impressions_before_pause || 100;
+        const threshold = autoConfig?.performance_threshold || 0.5;
+
+        const controlVariant = test.ab_test_variants.find((v: any) => v.is_control);
+        if (!controlVariant || !controlVariant.avg_engagement_rate) continue;
+
+        for (const variant of test.ab_test_variants) {
+          if (variant.is_control) continue;
+          if ((variant.total_impressions || 0) < minImpressions) continue;
+
+          const performanceRatio = (variant.avg_engagement_rate || 0) / controlVariant.avg_engagement_rate;
+          if (performanceRatio < threshold) {
+            suggestions.push({
+              testId: test.id,
+              testName: test.name,
+              platform: test.platform,
+              variantId: variant.id,
+              variantName: variant.variant_name,
+              impressions: variant.total_impressions,
+              reason: `${((1 - performanceRatio) * 100).toFixed(0)}% below the control variant after ${variant.total_impressions} impressions`,
+            });
+          }
+        }
+      }
+
+      return new Response(
+        JSON.stringify({ success: true, suggestions }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     if (action === 'auto_optimize') {
       // Check for underperforming variants
       const { data: runningTests } = await supabase
