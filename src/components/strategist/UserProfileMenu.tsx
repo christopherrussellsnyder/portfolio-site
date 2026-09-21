@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Settings, User, HelpCircle, LogOut, CreditCard, ChevronUp, BarChart3, FileText, Image, Sparkles, Clapperboard, Sun, Moon } from 'lucide-react';
+import { Settings, User, HelpCircle, LogOut, CreditCard, ChevronUp, BarChart3, FileText, Image, Sparkles, Clapperboard, Sun, Moon, FlaskConical } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useSubscription } from '@/contexts/SubscriptionContext';
@@ -179,6 +179,14 @@ export function UserProfileMenu() {
           >
             <Image className="w-4 h-4 text-muted-foreground" />
             <span className="text-sm">Media</span>
+          </DropdownMenuItem>
+
+          <DropdownMenuItem
+            className="flex items-center gap-3 px-3 py-2.5 cursor-pointer rounded-md hover:bg-surface-tertiary focus:bg-surface-tertiary transition-colors"
+            onClick={() => navigate('/ab-testing')}
+          >
+            <FlaskConical className="w-4 h-4 text-muted-foreground" />
+            <span className="text-sm">A/B Testing</span>
           </DropdownMenuItem>
 
           <DropdownMenuSeparator className="bg-[hsl(var(--border-subtle))]" />

@@ -31,6 +31,7 @@ const MediaLibrary = lazy(() => import("./pages/MediaLibrary"));
 const Settings = lazy(() => import("./pages/Settings"));
 const Research = lazy(() => import("./pages/Research"));
 const ContentGeneration = lazy(() => import("./pages/ContentGeneration"));
+const ABTesting = lazy(() => import("./pages/ABTesting"));
 
 
 const HealthCheck = lazy(() => import("./pages/HealthCheck"));
@@ -174,7 +175,7 @@ const App = () => (
                   <Route path="/scheduler" element={<Navigate to="/ai-strategist" replace />} />
                   <Route path="/campaigns" element={<Navigate to="/ai-strategist" replace />} />
                   <Route path="/analytics" element={<Navigate to="/insights" replace />} />
-                  <Route path="/ab-testing" element={<Navigate to="/ai-strategist" replace />} />
+                  {/* /ab-testing used to redirect here; it's a real page again below */}
                   <Route path="/audience" element={<Navigate to="/ai-strategist" replace />} />
                   <Route path="/content-ai" element={<Navigate to="/ai-strategist" replace />} />
                   <Route path="/ai-analytics" element={<Navigate to="/insights" replace />} />
@@ -251,6 +252,14 @@ const App = () => (
                     }
                   />
                   <Route path="/video-ads" element={<Navigate to="/content-generation" replace />} />
+                  <Route
+                    path="/ab-testing"
+                    element={
+                      <ProtectedRoute>
+                        <ABTesting />
+                      </ProtectedRoute>
+                    }
+                  />
 
                   <Route
                     path="/settings"
