@@ -10,6 +10,16 @@ import {
   type IntelResult,
 } from "../_shared/strategy-intel.ts";
 
+// This generates a full multi-day content calendar in one call -- the same
+// class of creative/reasoning work generate-strategy's MODEL_CREATIVE tier
+// handles, which already uses gemini-3-flash-preview successfully across
+// ai-chat, campaign-intelligence, generate-client-report, generate-post-visual,
+// refresh-campaign-intelligence and support-chat. This function was still on
+// the older gemini-2.5-flash tier. Shares generate-strategy's
+// STRATEGY_MODEL_OVERRIDE env var rather than a separate one, so trying a
+// stronger model is one Supabase dashboard change for both generators.
+const MODEL_CREATIVE = Deno.env.get('STRATEGY_MODEL_OVERRIDE') || 'google/gemini-3-flash-preview';
+
 serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
   if (req.method === 'OPTIONS') {
@@ -184,7 +194,7 @@ serve(async (req) => {
     console.log('Calling AI with comprehensive context, length:', strategyContext.length);
 
     const aiResponse = await callLovableGateway(LOVABLE_API_KEY, {
-        model: 'google/gemini-2.5-flash',
+        model: MODEL_CREATIVE,
         messages: [
           {
             role: 'system',
