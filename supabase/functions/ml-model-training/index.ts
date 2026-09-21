@@ -28,13 +28,15 @@ serve(async (req) => {
     const isInternalServiceCall = token === Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
     const body = await req.json();
-    let userId: string;
+    let userId = '';
     if (isInternalServiceCall) {
-      if (!body.userId) {
+      // train_all_users is the one action that legitimately has no single
+      // userId -- it's the cron entry point that trains every eligible user.
+      if (!body.userId && body.action !== 'train_all_users') {
         return new Response(JSON.stringify({ error: 'userId is required' }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
-      userId = body.userId;
+      userId = body.userId || '';
     } else {
       const { data: authData, error: authErr } = await supabase.auth.getUser(token);
       if (authErr || !authData.user) {
@@ -48,103 +50,53 @@ serve(async (req) => {
     console.log('ML training action:', action);
     
     if (action === 'train_model') {
-      // Get training data from scheduled_posts since ml_training_data might be empty
-      const { data: postsData, error: postsError } = await supabase
+      const result = await trainModelForUser(supabase, userId);
+      return new Response(JSON.stringify(result), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
+    // Weekly batch retrain, cron-only: loops every user with enough published
+    // post history and (re)trains their model. A single train_model call is
+    // scoped to the requesting user, which doesn't compose into "retrain
+    // everyone" -- this is what the pg_cron job actually calls.
+    if (action === 'train_all_users') {
+      if (!isInternalServiceCall) {
+        return new Response(JSON.stringify({ error: 'Forbidden' }),
+          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+
+      const { data: publishedPosts, error: postsErr } = await supabase
         .from('scheduled_posts')
-        .select('*')
-        .eq('user_id', userId)
+        .select('user_id')
         .eq('status', 'published')
         .not('impressions', 'is', null)
         .gt('impressions', 0);
-      
-      const trainingData = (postsData || []).map(post => {
-        const publishedAt = new Date(post.published_at || post.scheduled_time);
-        const engagementRate = post.impressions > 0 
-          ? (post.engagements / post.impressions) * 100 
-          : 0;
-        
-        return {
-          day_of_week: publishedAt.getDay(),
-          hour_of_day: publishedAt.getHours(),
-          month: publishedAt.getMonth() + 1,
-          is_weekend: publishedAt.getDay() === 0 || publishedAt.getDay() === 6,
-          content_length: post.content?.length || 0,
-          has_media: post.media_urls && post.media_urls.length > 0,
-          has_video: post.media_urls?.some((url: string) => /\.(mp4|mov|avi)$/i.test(url)) || false,
-          hashtag_count: (post.content?.match(/#/g) || []).length,
-          has_question: post.content?.includes('?') || false,
-          emoji_count: 0,
-          engagement_rate: engagementRate
-        };
-      });
-      
-      if (!trainingData || trainingData.length < 10) {
-        return new Response(
-          JSON.stringify({
-            success: false,
-            error: 'Insufficient training data',
-            message: `Need at least 10 published posts with engagement data. You have ${trainingData?.length || 0}.`
-          }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
+      if (postsErr) throw postsErr;
+
+      const counts = new Map<string, number>();
+      for (const row of publishedPosts || []) {
+        counts.set(row.user_id, (counts.get(row.user_id) || 0) + 1);
       }
-      
-      const model = trainGradientBoostingModel(trainingData);
-      
-      const { data: modelVersion, error } = await supabase
-        .from('ml_model_versions')
-        .insert({
-          user_id: userId,
-          model_version: `v${Date.now()}`,
-          training_samples: trainingData.length,
-          accuracy_score: model.accuracy,
-          mean_absolute_error: model.mae,
-          feature_importance: model.featureImportance,
-          model_parameters: model.parameters,
-          is_active: false
-        })
-        .select()
-        .single();
-      
-      if (error) throw error;
-      
-      // Deactivate other models
-      await supabase
-        .from('ml_model_versions')
-        .update({ is_active: false })
-        .eq('user_id', userId)
-        .neq('id', modelVersion.id);
-      
-      // Activate new model
-      await supabase
-        .from('ml_model_versions')
-        .update({ is_active: true })
-        .eq('id', modelVersion.id);
-      
-      // Generate prediction cache
-      await generatePredictionCacheInternal(userId, modelVersion.id, model, supabase);
-      
+      const eligibleUserIds = [...counts.entries()].filter(([, n]) => n >= 10).map(([id]) => id);
+
+      let trained = 0;
+      let failed = 0;
+      for (const eligibleUserId of eligibleUserIds) {
+        try {
+          const result = await trainModelForUser(supabase, eligibleUserId);
+          if (result.success) trained++; else failed++;
+        } catch (e) {
+          console.error(`Training failed for user ${eligibleUserId}:`, e instanceof Error ? e.message : e);
+          failed++;
+        }
+      }
+
       return new Response(
-        JSON.stringify({
-          success: true,
-          model: modelVersion,
-          stats: {
-            trainingSamples: trainingData.length,
-            accuracy: model.accuracy.toFixed(2),
-            mae: model.mae.toFixed(2),
-            topFeatures: Object.entries(model.featureImportance)
-              .sort((a, b) => (b[1] as number) - (a[1] as number))
-              .slice(0, 5)
-              .map(([feature, importance]) => ({ 
-                feature, 
-                importance: (importance as number).toFixed(3) 
-              }))
-          }
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ success: true, eligible: eligibleUserIds.length, trained, failed }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       );
     }
-    
+
+
     if (action === 'get_active_model') {
       const { data: activeModel } = await supabase
         .from('ml_model_versions')
@@ -246,6 +198,102 @@ serve(async (req) => {
     );
   }
 });
+
+/** Trains and activates a gradient-boosting model for one user from their
+ *  own published post history. Shared by the single-user train_model action
+ *  and the cron-only train_all_users batch action, so a user's model is
+ *  trained exactly the same way whether they triggered it or the weekly job did. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function trainModelForUser(supabase: any, userId: string) {
+  const { data: postsData } = await supabase
+    .from('scheduled_posts')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('status', 'published')
+    .not('impressions', 'is', null)
+    .gt('impressions', 0);
+
+  const trainingData = (postsData || []).map((post: any) => {
+    const publishedAt = new Date(post.published_at || post.scheduled_time);
+    const engagementRate = post.impressions > 0
+      ? (post.engagements / post.impressions) * 100
+      : 0;
+
+    return {
+      day_of_week: publishedAt.getDay(),
+      hour_of_day: publishedAt.getHours(),
+      month: publishedAt.getMonth() + 1,
+      is_weekend: publishedAt.getDay() === 0 || publishedAt.getDay() === 6,
+      content_length: post.content?.length || 0,
+      has_media: post.media_urls && post.media_urls.length > 0,
+      has_video: post.media_urls?.some((url: string) => /\.(mp4|mov|avi)$/i.test(url)) || false,
+      hashtag_count: (post.content?.match(/#/g) || []).length,
+      has_question: post.content?.includes('?') || false,
+      emoji_count: 0,
+      engagement_rate: engagementRate
+    };
+  });
+
+  if (!trainingData || trainingData.length < 10) {
+    return {
+      success: false,
+      error: 'Insufficient training data',
+      message: `Need at least 10 published posts with engagement data. You have ${trainingData?.length || 0}.`
+    };
+  }
+
+  const model = trainGradientBoostingModel(trainingData);
+
+  const { data: modelVersion, error } = await supabase
+    .from('ml_model_versions')
+    .insert({
+      user_id: userId,
+      model_version: `v${Date.now()}`,
+      training_samples: trainingData.length,
+      accuracy_score: model.accuracy,
+      mean_absolute_error: model.mae,
+      feature_importance: model.featureImportance,
+      model_parameters: model.parameters,
+      is_active: false
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+
+  // Deactivate other models
+  await supabase
+    .from('ml_model_versions')
+    .update({ is_active: false })
+    .eq('user_id', userId)
+    .neq('id', modelVersion.id);
+
+  // Activate new model
+  await supabase
+    .from('ml_model_versions')
+    .update({ is_active: true })
+    .eq('id', modelVersion.id);
+
+  // Generate prediction cache
+  await generatePredictionCacheInternal(userId, modelVersion.id, model, supabase);
+
+  return {
+    success: true,
+    model: modelVersion,
+    stats: {
+      trainingSamples: trainingData.length,
+      accuracy: model.accuracy.toFixed(2),
+      mae: model.mae.toFixed(2),
+      topFeatures: Object.entries(model.featureImportance)
+        .sort((a, b) => (b[1] as number) - (a[1] as number))
+        .slice(0, 5)
+        .map(([feature, importance]) => ({
+          feature,
+          importance: (importance as number).toFixed(3)
+        }))
+    }
+  };
+}
 
 interface TrainingRow {
   day_of_week: number;

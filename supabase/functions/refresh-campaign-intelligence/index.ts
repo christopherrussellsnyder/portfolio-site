@@ -3,6 +3,41 @@ import { serviceClient } from "../_shared/supabase.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { callLovableGateway } from "../_shared/llm-gateway.ts";
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type SupabaseServiceClient = any;
+
+// This function fans out into up to 56 LLM calls per invocation (4 platforms
+// x 14 niches). It previously had no auth check at all, so anyone holding
+// the public anon key -- i.e. everyone, since it's embedded in the frontend
+// bundle -- could trigger it repeatedly and burn through the LLM budget.
+// It's meant to run on a schedule (see the pg_cron job that invokes it),
+// so restrict it to that cron job or an admin/owner triggering a manual
+// refresh, same gate as calculate-prediction-accuracy.
+async function assertCronOrAdmin(
+  supabase: SupabaseServiceClient,
+  req: Request,
+  serviceKey: string,
+  corsHeaders: Record<string, string>,
+): Promise<Response | null> {
+  const authHeader = req.headers.get("Authorization") ?? "";
+  const isCron = req.headers.get("Lovable-Context") === "cron" || authHeader === `Bearer ${serviceKey}`;
+  if (isCron) return null;
+
+  const { data: userData } = await supabase.auth.getUser(authHeader.replace("Bearer ", ""));
+  const uid = userData?.user?.id;
+  let isAdmin = false;
+  if (uid) {
+    const { data: roles } = await supabase.from("user_roles").select("role").eq("user_id", uid);
+    isAdmin = (roles ?? []).some((r: { role: string }) => r.role === "admin" || r.role === "owner");
+  }
+  if (isAdmin) return null;
+
+  return new Response(JSON.stringify({ error: "Forbidden" }), {
+    status: 403,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
 const PLATFORMS = ["meta", "tiktok", "google", "linkedin"];
 const PRIORITY_NICHES = [
   "general", "ecommerce", "saas", "fitness", "beauty", "fashion",
@@ -63,6 +98,10 @@ serve(async (req) => {
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY missing");
 
     const supabase = serviceClient();
+
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const forbidden = await assertCronOrAdmin(supabase, req, serviceKey, corsHeaders);
+    if (forbidden) return forbidden;
 
     // Optional: pass { platform, niche } to refresh a single pair on demand
     let targets: { platform: string; niche: string }[] = [];
