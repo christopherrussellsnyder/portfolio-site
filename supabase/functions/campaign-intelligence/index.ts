@@ -14,10 +14,16 @@ serve(async (req) => {
   if (gate instanceof Response) return gate;
 
   try {
-    const { userId, action, campaignData, templateId } = await req.json();
-    
+    // requirePro() already verified the caller's session -- gate.userId is
+    // the only trustworthy source of identity here. Previously this
+    // destructured a separate, client-supplied `userId` from the body and
+    // used that instead, so any authenticated user could pass someone
+    // else's userId and read or mutate their campaigns.
+    const userId = gate.userId;
+    const { action, campaignData, templateId } = await req.json();
+
     const supabase = serviceClient();
-    
+
     console.log('Campaign intelligence action:', action, 'for user:', userId);
     
     if (action === 'get_templates') {
@@ -87,23 +93,25 @@ serve(async (req) => {
     }
     
     if (action === 'get_performance') {
+      const { data: campaign } = await supabase
+        .from('campaigns')
+        .select('*')
+        .eq('id', campaignData.campaignId)
+        .eq('user_id', userId)
+        .single();
+      if (!campaign) throw new Error('Campaign not found');
+
       const { data: performance } = await supabase
         .rpc('calculate_campaign_performance', {
           p_campaign_id: campaignData.campaignId
         });
-      
+
       const { data: dailyTracking } = await supabase
         .from('campaign_performance_tracking')
         .select('*')
         .eq('campaign_id', campaignData.campaignId)
         .order('tracked_date', { ascending: true });
-      
-      const { data: campaign } = await supabase
-        .from('campaigns')
-        .select('*')
-        .eq('id', campaignData.campaignId)
-        .single();
-      
+
       const analysis = analyzeCampaignPerformance(
         performance?.[0],
         campaign,
@@ -236,6 +244,7 @@ serve(async (req) => {
         .from('campaigns')
         .select('*, scheduled_posts(*)')
         .eq('id', campaignId)
+        .eq('user_id', userId)
         .single();
 
       if (!campaign) throw new Error('Campaign not found');
@@ -267,7 +276,8 @@ serve(async (req) => {
           post_campaign_learnings: analysis,
           actual_vs_predicted: calculateActualVsPredicted(campaign, publishedPosts)
         })
-        .eq('id', campaignId);
+        .eq('id', campaignId)
+        .eq('user_id', userId);
 
       return new Response(
         JSON.stringify({ 
@@ -329,6 +339,7 @@ serve(async (req) => {
         .from('campaigns')
         .select('*, scheduled_posts(*)')
         .eq('id', campaignId)
+        .eq('user_id', userId)
         .single();
 
       if (!campaign) throw new Error('Campaign not found');
