@@ -9,10 +9,42 @@ serve(async (req) => {
   }
 
   try {
-    const { userId, action, modelData } = await req.json();
-    
     const supabase = serviceClient();
-    
+
+    // Service-role client bypasses RLS; this previously trusted a
+    // client-supplied userId for every read/write. This function is also
+    // cross-invoked internally by dynamic-optimization using a service-role
+    // client, which authenticates as the service role itself rather than a
+    // user session -- so a direct call must resolve a real verified user,
+    // while a service-role-authenticated call (only possible for trusted
+    // server-side code that holds that secret) may still pass userId in the
+    // body, since the internal caller already verified it.
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return new Response(JSON.stringify({ error: 'Authentication required' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+    const token = authHeader.replace('Bearer ', '');
+    const isInternalServiceCall = token === Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+
+    const body = await req.json();
+    let userId: string;
+    if (isInternalServiceCall) {
+      if (!body.userId) {
+        return new Response(JSON.stringify({ error: 'userId is required' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      userId = body.userId;
+    } else {
+      const { data: authData, error: authErr } = await supabase.auth.getUser(token);
+      if (authErr || !authData.user) {
+        return new Response(JSON.stringify({ error: 'Invalid session' }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      userId = authData.user.id;
+    }
+    const { action, modelData } = body;
+
     console.log('ML training action:', action);
     
     if (action === 'train_model') {
