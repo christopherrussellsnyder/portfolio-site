@@ -897,7 +897,7 @@ serve(async (req) => {
     // Pull the user's actual historical performance and feed proven learnings back into prompts.
     const normalizedPlatform = normalizePlatformForIntel(platform);
     const recentCampaignCutoff = new Date(Date.now() - 45 * 24 * 60 * 60 * 1000).toISOString();
-    const [topPostsRes, contentPatternsRes, optimalSlotsRes, baselineRes, topHashtagsRes, activeCampaignRes] = await Promise.all([
+    const [topPostsRes, contentPatternsRes, optimalSlotsRes, baselineRes, topHashtagsRes, activeCampaignRes, calibrationRes] = await Promise.all([
       supabase.rpc('get_top_performing_posts', { p_user_id: user.id, p_platform: normalizedPlatform, p_limit: 5 }),
       supabase.from('content_performance_patterns').select('pattern_type,pattern_value,avg_engagement_rate,post_count').eq('user_id', user.id).order('performance_score', { ascending: false }).limit(20),
       supabase.rpc('get_optimal_time_slots', { p_user_id: user.id, p_platform: normalizedPlatform, p_limit: 5 }),
@@ -914,6 +914,18 @@ serve(async (req) => {
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle(),
+      // Predicted-vs-actual calibration for this niche (same loop generate-ad-script
+      // already uses for creative_* pattern types) -- hook_technique/post_type are
+      // the strategy-relevant ones. is_calibrated gates on sample_size >= 10, so this
+      // is empty until enough scored outcomes exist for this niche.
+      supabase
+        .from('niche_calibration')
+        .select('pattern_type,pattern_value,error_pct,sample_size,avg_actual')
+        .eq('niche', niche)
+        .eq('is_calibrated', true)
+        .in('pattern_type', ['hook_technique', 'post_type'])
+        .order('sample_size', { ascending: false })
+        .limit(10),
     ]);
 
     const topPosts = topPostsRes.data || [];
@@ -922,6 +934,7 @@ serve(async (req) => {
     const baseline = (baselineRes.data && baselineRes.data[0]) || null;
     const topHashtags = topHashtagsRes.data || [];
     const activeCampaign = activeCampaignRes.data || null;
+    const calibration = calibrationRes.data || [];
 
     let performanceFeedbackSection = '';
     if (topPosts.length > 0 || patterns.length > 0 || slots.length > 0 || baseline) {
@@ -979,6 +992,25 @@ serve(async (req) => {
       performanceFeedbackSection = lines.join('\n');
     } else {
       performanceFeedbackSection = '=== PROVEN PERFORMANCE LEARNINGS ===\nNo historical performance data for this user yet. Use general best practices for now; future strategies will incorporate their actual results as posts are published and analytics uploaded.';
+    }
+
+    // Calibrated niche performance: predicted-vs-actual aggregated across every
+    // advertiser in this niche (not just this user), same loop generate-ad-script
+    // already uses for creative_* pattern types. A secondary-confidence signal --
+    // weighted below this user's own first-party data above, but above generic
+    // best practices, so it stays a clearly separate block rather than folded
+    // into the "THIS USER'S ACTUAL PUBLISHED RESULTS" section above.
+    if (calibration.length > 0) {
+      const calLines = calibration.map((c: any) => {
+        const label = String(c.pattern_type).replace(/_/g, ' ');
+        const errorPct = Number(c.error_pct) || 0;
+        const drift = errorPct > 0
+          ? `historically UNDER-predicted by ~${Math.abs(errorPct).toFixed(0)}% (it beats expectations)`
+          : `historically OVER-predicted by ~${Math.abs(errorPct).toFixed(0)}% (it disappoints)`;
+        return `- ${label} = "${c.pattern_value}": measured ${Number(c.avg_actual || 0).toFixed(2)}% avg engagement across ${c.sample_size} scored outcomes in this niche; ${drift}.`;
+      });
+      const calibrationSection = `=== CALIBRATED NICHE PERFORMANCE (MEASURED PREDICTED-VS-ACTUAL ACROSS THIS NICHE — TREAT AS FACT, NOT OPINION) ===\n${calLines.join('\n')}\n\nThis is aggregated across advertisers in this niche, not just this user, so weight it below the first-party learnings above but above general best practices. Favor hook techniques and post types that beat expectations; be cautious with ones that consistently disappoint. If a post's prediction_basis leans on this, name it "niche calibration" specifically — never claim it as this user's own measured result.`;
+      performanceFeedbackSection = `${performanceFeedbackSection}\n\n${calibrationSection}`;
     }
 
     // Cross-channel: reinforce the active paid campaign instead of generating
