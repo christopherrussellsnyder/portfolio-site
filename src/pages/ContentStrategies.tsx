@@ -95,7 +95,9 @@ export default function ContentStrategies() {
     const data = await fetchStrategy(id);
     if (data) {
       setSelectedStrategy({
-        strategy: data.strategy as any,
+        // created_at is optional on StrategyOverview but always present on a
+        // fetched row.
+        strategy: data.strategy as StrategyOverview & { id: string; created_at: string },
         posts: data.posts,
       });
     }
@@ -184,7 +186,7 @@ export default function ContentStrategies() {
                     onExportCSV={() => exportStrategyToCSV(selectedStrategy.strategy, selectedStrategy.posts)}
                   />
                   <CampaignStructureCard
-                    data={(selectedStrategy.strategy as any).recommended_campaign_structure}
+                    data={selectedStrategy.strategy.recommended_campaign_structure}
                     platform={selectedStrategy.strategy.platform}
                   />
                 </div>

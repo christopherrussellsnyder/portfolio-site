@@ -46,7 +46,7 @@ export function BrandKitSection() {
         .eq('workspace_id', activeWorkspace.id)
         .maybeSingle();
       setKit(
-        (data as any) ?? {
+        data ?? {
           workspace_id: activeWorkspace.id,
           logo_url: null,
           primary_color: 'hsl(var(--primary))',

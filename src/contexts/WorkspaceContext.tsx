@@ -87,7 +87,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       setWorkspaces(list);
 
       // Determine active workspace
-      const savedId = (profile as any)?.active_workspace_id as string | null | undefined;
+      const savedId = profile?.active_workspace_id;
       const active = list.find((w) => w.id === savedId) || list.find((w) => w.is_default) || list[0];
       setActiveWorkspaceId(active?.id ?? null);
     } catch (err) {

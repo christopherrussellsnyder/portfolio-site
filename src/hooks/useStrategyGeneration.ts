@@ -354,8 +354,12 @@ export function useStrategyGeneration() {
         implementation_guide: strategy.implementation_guide as ImplementationGuide | null,
         post_type_distribution: strategy.post_type_distribution as Record<string, number> | null,
         theme_distribution: strategy.theme_distribution as Record<string, number> | null,
-        recommended_campaign_structure: (strategy as any).recommended_campaign_structure as Record<string, any> | null,
-        evidence_summary: (strategy as any).evidence_summary as EvidenceSummary | null,
+        // recommended_campaign_structure and evidence_summary are real columns
+        // on content_strategies, but the generated types.ts predates them (it
+        // can only be regenerated against a live-connected Supabase project)
+        // -- cast through the raw row rather than the stale Row type.
+        recommended_campaign_structure: (strategy as unknown as { recommended_campaign_structure: Record<string, unknown> | null }).recommended_campaign_structure,
+        evidence_summary: (strategy as unknown as { evidence_summary: EvidenceSummary | null }).evidence_summary,
       } as StrategyOverview,
       posts: posts.map(post => ({
         ...post,
