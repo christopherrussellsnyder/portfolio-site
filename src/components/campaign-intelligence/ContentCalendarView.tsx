@@ -172,9 +172,18 @@ export function ContentCalendarView({
                     className={`transition-all ${isExpanded ? 'ring-2 ring-primary' : 'hover:border-primary/50'}`}
                   >
                     <CardContent className="p-4">
-                      <div 
+                      <div
                         className="flex items-start gap-4 cursor-pointer"
+                        role="button"
+                        tabIndex={0}
+                        aria-expanded={isExpanded}
                         onClick={() => setExpandedDay(isExpanded ? null : post.day_number)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            setExpandedDay(isExpanded ? null : post.day_number);
+                          }
+                        }}
                       >
                         {/* Day Badge */}
                         <div className="flex flex-col items-center min-w-[60px]">
@@ -323,10 +332,19 @@ export function ContentCalendarView({
                 <CardContent className="p-4">
                   <div className="space-y-2">
                     {week.posts.map(post => (
-                      <div 
+                      <div
                         key={post.day_number}
                         className="flex items-center justify-between p-2 bg-muted/50 rounded-lg hover:bg-muted cursor-pointer"
+                        role="button"
+                        tabIndex={0}
+                        aria-expanded={expandedDay === post.day_number}
                         onClick={() => setExpandedDay(expandedDay === post.day_number ? null : post.day_number)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            setExpandedDay(expandedDay === post.day_number ? null : post.day_number);
+                          }
+                        }}
                       >
                         <div className="flex items-center gap-2">
                           <Badge variant="outline" className="w-8 h-6 justify-center">
