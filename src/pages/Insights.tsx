@@ -18,6 +18,7 @@ import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { HealthScoreBadge } from '@/components/insights/HealthScoreBadge';
 import { AnalysisDetail } from '@/components/insights/AnalysisDetail';
+import { ContentPatternsPanel } from '@/components/insights/ContentPatternsPanel';
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
 
@@ -380,6 +381,7 @@ export default function Insights() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <ContentPatternsPanel />
         {isLoading ? (
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-6" aria-busy="true" aria-label="Loading analytics">
             <div className="lg:col-span-1 space-y-4">
