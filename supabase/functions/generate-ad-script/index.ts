@@ -4,6 +4,7 @@ import { checkRateLimit, clientKey } from "../_shared/rate-limit.ts";
 import { loadBrandKit, recentTreatments, normalizePlan } from "../_shared/ad-production.ts";
 import { buildAdCtx, gatherAdIntel, normalizeAdPlatform } from "../_shared/ad-intel.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { callLovableGateway } from "../_shared/llm-gateway.ts";
 
 const MODEL = "google/gemini-2.5-flash";
 
@@ -320,20 +321,13 @@ Write the ${variantCount} script variants, each with its production plan, now.`;
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
-    const aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: MODEL,
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-        response_format: { type: "json_object" },
-      }),
+    const aiRes = await callLovableGateway(LOVABLE_API_KEY, {
+      model: MODEL,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+      response_format: { type: "json_object" },
     });
 
     if (!aiRes.ok) {

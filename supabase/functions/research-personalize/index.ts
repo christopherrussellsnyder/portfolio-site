@@ -8,6 +8,7 @@ import { serviceClient } from "../_shared/supabase.ts";
 import { checkRateLimit, clientKey } from "../_shared/rate-limit.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { isFounderEmail } from "../_shared/founder.ts";
+import { callLovableGateway } from "../_shared/llm-gateway.ts";
 
 const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY") ?? "";
 const CACHE_TTL_HOURS = 24 * 7;
@@ -131,20 +132,13 @@ async function generatePersonalization(
   if (!LOVABLE_API_KEY) throw new Error("Missing LOVABLE_API_KEY");
   const prompt = buildPrompt(platform, mode, industry, trends, ctx);
 
-  const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${LOVABLE_API_KEY}`,
-    },
-    body: JSON.stringify({
-      model: "google/gemini-2.5-flash-lite",
-      messages: [
-        { role: "system", content: "You return only valid JSON. No markdown fences." },
-        { role: "user", content: prompt },
-      ],
-      temperature: 0.6,
-    }),
+  const resp = await callLovableGateway(LOVABLE_API_KEY, {
+    model: "google/gemini-2.5-flash-lite",
+    messages: [
+      { role: "system", content: "You return only valid JSON. No markdown fences." },
+      { role: "user", content: prompt },
+    ],
+    temperature: 0.6,
   });
 
   if (!resp.ok) {
