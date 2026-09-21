@@ -175,7 +175,7 @@ export function TeamMembersSection() {
               disabled={inviting || seatsUsed >= SEAT_LIMIT}
               className="flex-1"
             />
-            <Select value={inviteRole} onValueChange={(v) => setInviteRole(v as any)}>
+            <Select value={inviteRole} onValueChange={(v) => setInviteRole(v as 'viewer' | 'manager')}>
               <SelectTrigger className="w-full sm:w-40">
                 <SelectValue />
               </SelectTrigger>

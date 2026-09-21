@@ -194,7 +194,7 @@ export default function ContentStrategies() {
               <div className="lg:col-span-2 space-y-4">
                 <OutcomeTrackingPanel strategyId={selectedStrategy.strategy.id} />
                 {selectedStrategy.posts.map(post => (
-                  <StrategyPostCard key={post.id} post={post} />
+                  <StrategyPostCard key={post.id} post={post} platform={selectedStrategy.strategy.platform} />
                 ))}
               </div>
             </div>

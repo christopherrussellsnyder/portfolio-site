@@ -43,6 +43,8 @@ interface CaptionVariant {
 
 interface StrategyPostCardProps {
   post: StrategyPost;
+  /** The parent strategy's platform (StrategyPost itself carries no platform column). */
+  platform?: string | null;
   onEdit?: (post: StrategyPost) => void;
   onAskAI?: (post: StrategyPost) => void;
 }
@@ -84,7 +86,7 @@ const confidenceColors: Record<string, string> = {
   Low: 'text-muted-foreground',
 };
 
-export function StrategyPostCard({ post, onEdit, onAskAI }: StrategyPostCardProps) {
+export function StrategyPostCard({ post, platform, onEdit, onAskAI }: StrategyPostCardProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [variants, setVariants] = useState<CaptionVariant[]>([]);
@@ -104,7 +106,7 @@ export function StrategyPostCard({ post, onEdit, onAskAI }: StrategyPostCardProp
         body: {
           caption: activeCaption,
           hook: post.hook,
-          platform: (post as any).platform,
+          platform,
           postType: post.post_type,
           theme: post.theme,
           contentCategory: post.content_category,
@@ -202,12 +204,12 @@ export function StrategyPostCard({ post, onEdit, onAskAI }: StrategyPostCardProp
       videoBrief,
       angle: angleForTheme(post.theme),
       durationSeconds: durationForPost(post.post_type),
-      aspectRatio: aspectForPost(post.post_type, (post as any).platform),
+      aspectRatio: aspectForPost(post.post_type, platform),
       promoDetail: post.theme === 'promotional' ? post.cta ?? undefined : undefined,
       imageConcept: imageBrief,
       textOverlay: vg.text_overlay || undefined,
       palette: vg.color_palette || undefined,
-      platform: platformForPost((post as any).platform),
+      platform: platformForPost(platform),
       tab,
     });
     navigate(

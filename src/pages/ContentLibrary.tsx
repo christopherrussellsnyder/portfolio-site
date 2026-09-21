@@ -462,7 +462,7 @@ export default function ContentLibrary() {
               <div className="flex items-center gap-2">
                 <select
                   value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value as any)}
+                  onChange={(e) => setSortBy(e.target.value as 'recent' | 'used' | 'performance' | 'az')}
                   className="h-10 px-3 rounded-lg bg-card border border-border text-foreground text-sm"
                 >
                   <option value="recent">Most Recent</option>

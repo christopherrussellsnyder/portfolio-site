@@ -117,7 +117,7 @@ export function ChatArea({
       setHasStrategies((count || 0) > 0);
       
       if (settingsData) {
-        const ta = (settingsData.target_audience as any) || {};
+        const ta = (settingsData.target_audience as Record<string, unknown>) || {};
         setSettingsComplete(!!(settingsData.business_name && settingsData.industry && ta.age_range));
       } else {
         setSettingsComplete(false);
@@ -142,7 +142,7 @@ export function ChatArea({
       id: msg.id,
       role: msg.role as 'user' | 'assistant',
       content: msg.content,
-      attachments: msg.attachments as any,
+      attachments: msg.attachments as { type: string; url: string; name?: string }[] | undefined,
       createdAt: new Date(msg.created_at || new Date()),
     })));
   };
@@ -908,7 +908,7 @@ I'll use this context to provide personalized marketing recommendations. You can
                       <Label className="text-xs">Response Style</Label>
                       <Select
                         value={preferences.response_style}
-                        onValueChange={(v) => setPreferences(p => ({ ...p, response_style: v as any }))}
+                        onValueChange={(v) => setPreferences(p => ({ ...p, response_style: v as ContextPreferences['response_style'] }))}
                       >
                         <SelectTrigger className="h-8 text-xs">
                           <SelectValue />
@@ -925,7 +925,7 @@ I'll use this context to provide personalized marketing recommendations. You can
                       <Label className="text-xs">Tone</Label>
                       <Select
                         value={preferences.tone_preference}
-                        onValueChange={(v) => setPreferences(p => ({ ...p, tone_preference: v as any }))}
+                        onValueChange={(v) => setPreferences(p => ({ ...p, tone_preference: v as ContextPreferences['tone_preference'] }))}
                       >
                         <SelectTrigger className="h-8 text-xs">
                           <SelectValue />
