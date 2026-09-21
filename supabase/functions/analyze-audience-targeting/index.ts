@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { serviceClient, userClient } from "../_shared/supabase.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { callLovableGateway } from "../_shared/llm-gateway.ts";
 
 interface BusinessProfile {
   business_name: string;
@@ -115,27 +116,20 @@ Ensure all recommendations are specific, actionable, and directly applicable to 
     let recommendations;
 
     if (lovableApiKey) {
-      const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${lovableApiKey}`,
-        },
-        body: JSON.stringify({
-          model: 'openai/gpt-5-mini',
-          messages: [
-            {
-              role: 'system',
-              content: 'You are an expert digital marketing strategist. Always respond with valid JSON only, no additional text.'
-            },
-            {
-              role: 'user',
-              content: prompt
-            }
-          ],
-          temperature: 0.7,
-          max_tokens: 4000,
-        }),
+      const aiResponse = await callLovableGateway(lovableApiKey, {
+        model: 'openai/gpt-5-mini',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are an expert digital marketing strategist. Always respond with valid JSON only, no additional text.'
+          },
+          {
+            role: 'user',
+            content: prompt
+          }
+        ],
+        temperature: 0.7,
+        max_tokens: 4000,
       });
 
       if (!aiResponse.ok) {
