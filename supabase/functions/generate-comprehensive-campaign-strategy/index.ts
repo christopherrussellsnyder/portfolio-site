@@ -10,19 +10,37 @@ serve(async (req) => {
   }
 
   try {
-    const { 
-      userId, 
-      platform, 
-      niche, 
-      objective, 
-      businessProfileId, 
+    const supabase = serviceClient();
+
+    // Service-role client bypasses RLS; this previously trusted a
+    // client-supplied userId to read another account's business
+    // information, and looked up businessProfileId/requestId with no
+    // ownership check at all. Derive userId from the verified token and
+    // scope every lookup to it.
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return new Response(JSON.stringify({ error: 'Authentication required' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+    const { data: authData, error: authErr } = await supabase.auth.getUser(
+      authHeader.replace('Bearer ', ''),
+    );
+    if (authErr || !authData.user) {
+      return new Response(JSON.stringify({ error: 'Invalid session' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+    const userId = authData.user.id;
+
+    const {
+      platform,
+      niche,
+      objective,
+      businessProfileId,
       duration = 30,
       requestId,
-      questionnaireData 
+      questionnaireData
     } = await req.json();
-    
-    const supabase = serviceClient();
-    
+
     console.log('Generating comprehensive strategy for:', { userId, platform, niche, objective, requestId });
 
     // Fetch questionnaire data if requestId provided
@@ -32,6 +50,7 @@ serve(async (req) => {
         .from('campaign_strategy_requests')
         .select('*')
         .eq('id', requestId)
+        .eq('user_id', userId)
         .single();
       campaignRequest = data;
     }
@@ -40,18 +59,12 @@ serve(async (req) => {
     const questionnaire = questionnaireData || campaignRequest || {};
 
     // Fetch comprehensive business information
-    let businessInfo: any = null;
-    if (userId) {
-      const { data: bizInfo } = await supabase
-        .from('business_information')
-        .select('*')
-        .eq('user_id', userId)
-        .single();
-      
-      if (bizInfo) {
-        businessInfo = bizInfo;
-      }
-    }
+    const { data: bizInfo } = await supabase
+      .from('business_information')
+      .select('*')
+      .eq('user_id', userId)
+      .single();
+    let businessInfo: any = bizInfo ?? null;
 
     // Fallback to legacy business_profiles if no business_information
     let businessProfile: any = null;
@@ -60,9 +73,10 @@ serve(async (req) => {
         .from('business_profiles')
         .select('*')
         .eq('id', businessProfileId)
+        .eq('user_id', userId)
         .single();
       businessProfile = data;
-    } else if (userId && !businessInfo) {
+    } else if (!businessInfo) {
       const { data } = await supabase
         .from('business_profiles')
         .select('*')
@@ -309,11 +323,12 @@ Be specific, creative, and actionable. Use the business context to personalize e
       if (requestId) {
         await supabase
           .from('campaign_strategy_requests')
-          .update({ 
+          .update({
             status: 'completed',
-            generated_strategy_id: strategyId 
+            generated_strategy_id: strategyId
           })
-          .eq('id', requestId);
+          .eq('id', requestId)
+          .eq('user_id', userId);
       }
       
       return new Response(
