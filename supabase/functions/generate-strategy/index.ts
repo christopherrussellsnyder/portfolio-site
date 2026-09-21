@@ -288,7 +288,11 @@ Make each post unique, strategic, and personalized for ${ctx.businessName}. Vary
 // Model routing. The long-form creative work stays on the stronger model; bounded
 // structured-JSON grading runs on the lite model (verified side-by-side to score
 // and flag identically on real prompts at a fraction of the cost).
-const MODEL_CREATIVE = 'google/gemini-3-flash-preview';
+// STRATEGY_MODEL_OVERRIDE lets the creative-tier model be swapped from the
+// Supabase dashboard (e.g. to try a stronger reasoning model for the overview/
+// batch generation steps) without a code change or redeploy. Unset falls back
+// to the known-working default below.
+const MODEL_CREATIVE = Deno.env.get('STRATEGY_MODEL_OVERRIDE') || 'google/gemini-3-flash-preview';
 const MODEL_STRUCTURED = 'google/gemini-2.5-flash-lite';
 
 async function callAI(
@@ -447,6 +451,7 @@ Mark "rewrite" for any post scoring under 75, and for every post named in the pr
       criticPrompt,
       'You are a ruthless but constructive CMO. Respond with valid JSON only.',
       8000,
+      MODEL_STRUCTURED,
     );
     const parsed = parseJSONSafe(raw);
     const rewrites = Array.isArray(parsed?.rewrites) ? parsed.rewrites : [];
