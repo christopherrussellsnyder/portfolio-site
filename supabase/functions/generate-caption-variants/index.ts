@@ -2,7 +2,9 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { requirePro } from "../_shared/require-pro.ts";
 import { checkRateLimit, clientKey } from "../_shared/rate-limit.ts";
-import { scoreCaption, selectDiverseCaptions } from "../_shared/algorithms.ts";
+import { scoreCaption, selectDiverseCaptions, extractGroundingTerms } from "../_shared/algorithms.ts";
+import { fetchSearchDemand, fetchCompetitorAds, fetchVoiceOfCustomer, type IntelResult } from "../_shared/strategy-intel.ts";
+import { buildAdCtx } from "../_shared/ad-intel.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { callLovableGateway } from "../_shared/llm-gateway.ts";
 
@@ -56,6 +58,31 @@ serve(async (req) => {
         (data ?? []).map((p) => p.content).filter(Boolean).join(' '))
       .catch(() => '');
 
+    // Live market grounding: the parent strategy/ad this caption came from was
+    // grounded in real search demand, competitor recon and customer language
+    // (strategy-intel.ts) — but regenerating variants here never re-pulled any
+    // of it, so a caption swap silently lost that grounding. Reuse the exact
+    // same sources, keyed off this business's own industry/products.
+    const [settingsRes, bizInfoRes, businessContextRes] = await Promise.all([
+      admin.from('user_business_settings').select('*').eq('user_id', gate.userId).maybeSingle(),
+      admin.from('business_information').select('*').eq('user_id', gate.userId).maybeSingle(),
+      admin.from('business_context').select('business_profile, website_url').eq('user_id', gate.userId).eq('is_active', true).maybeSingle(),
+    ]);
+    const adCtx = buildAdCtx(settingsRes.data, bizInfoRes.data, businessContextRes.data);
+
+    const [searchIntel, adIntel, vocIntel] = await Promise.all([
+      fetchSearchDemand(admin, adCtx.industry, adCtx.products, adCtx.geoFocus).catch(() => null),
+      fetchCompetitorAds(admin, adCtx.industry, adCtx.competitors, String(platform || 'all'), adCtx.geoFocus).catch(() => null),
+      fetchVoiceOfCustomer(admin, adCtx.industry, adCtx.products).catch(() => null),
+    ]);
+    const groundingParts = [searchIntel, adIntel, vocIntel].filter(
+      (s): s is IntelResult => !!s?.ok && !!s.section,
+    );
+    const intelSources = groundingParts.map((s) => s.source);
+    const groundingBlock = groundingParts.length
+      ? `\n\n${groundingParts.map((s) => s.section).join('\n\n')}\n\nGROUNDING RULES (mandatory):\n- Prefer the real search phrasing, customer language and unoccupied angles above over generic copywriting tropes.\n- Do not reuse the saturated angles shown in the competitor recon above — differentiate from them explicitly.\n- Never invent a number, quote or claim that isn't in the material above.`
+      : '';
+
     // Over-generate, then keep the best two by objective score AND angle
     // distance. One call, same cost bracket — a wider candidate pool costs only
     // output tokens, and two near-identical variants make a worthless A/B test.
@@ -91,6 +118,7 @@ JSON schema:
 """
 ${caption}
 """
+${groundingBlock}
 
 Generate ${CANDIDATE_POOL} distinct candidates now.`;
 
@@ -142,11 +170,16 @@ Generate ${CANDIDATE_POOL} distinct candidates now.`;
 
     const voiceCorpus = await voiceCorpusPromise;
     const voiceReference = [String(caption || ''), voiceCorpus].filter(Boolean).join(' ');
+    const groundingTerms = extractGroundingTerms([
+      searchIntel?.section, adIntel?.section, vocIntel?.section,
+      adCtx.products, adCtx.uvp, adCtx.businessName,
+    ]);
 
     const poolScores = pool.map((v: any) =>
       scoreCaption(v.caption, {
         platform: String(platform || ''),
         voiceReference,
+        groundingTerms,
         hook: String(v.hook || ''),
       }),
     );
@@ -225,7 +258,7 @@ Generate ${CANDIDATE_POOL} distinct candidates now.`;
     }
 
     return new Response(
-      JSON.stringify({ variants, ab_test_id: abTestId, registered_variants: registered }),
+      JSON.stringify({ variants, ab_test_id: abTestId, registered_variants: registered, intel_sources: intelSources }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
