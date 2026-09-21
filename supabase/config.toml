@@ -23,12 +23,6 @@ project_id = "vfwwhhkrquhbohlzazwo"
     verify_jwt = false
   [functions.auto-optimize-timing]
     verify_jwt = true
-  [functions.campaign-intelligence]
-    verify_jwt = true
-  [functions.competitor-analysis]
-    verify_jwt = true
-  [functions.content-success-predictor]
-    verify_jwt = true
   [functions.dynamic-optimization]
     verify_jwt = true
 
