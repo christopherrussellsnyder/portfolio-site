@@ -9,6 +9,14 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
+      // Deno remote-URL imports Vitest/Node can't resolve. Only aliased for
+      // shared modules whose pure logic is worth unit testing even though
+      // their unrelated top-level import can't run under Node -- see the
+      // stub file for why calling the real function here is not supported.
+      'https://esm.sh/@supabase/supabase-js@2.57.4': path.resolve(
+        __dirname,
+        './supabase/functions/_shared/__mocks__/supabase-js-stub.ts',
+      ),
     },
   },
 });
