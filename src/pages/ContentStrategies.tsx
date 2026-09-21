@@ -33,6 +33,7 @@ import { useStrategyGeneration, StrategyPost, StrategyOverview } from '@/hooks/u
 import { StrategyOverviewCard } from '@/components/strategy/StrategyOverviewCard';
 import { CampaignStructureCard } from '@/components/strategy/CampaignStructureCard';
 import { SchedulerIntelligenceCard } from '@/components/strategy/SchedulerIntelligenceCard';
+import { AutoScheduleCard } from '@/components/strategy/AutoScheduleCard';
 import { StrategyPostCard } from '@/components/strategy/StrategyPostCard';
 import { OutcomeTrackingPanel } from '@/components/strategy/OutcomeTrackingPanel';
 import { StrategyCalendarView } from '@/components/strategy/StrategyCalendarView';
@@ -191,6 +192,7 @@ export default function ContentStrategies() {
                     platform={selectedStrategy.strategy.platform}
                   />
                   <SchedulerIntelligenceCard platform={selectedStrategy.strategy.platform} />
+                  <AutoScheduleCard platform={selectedStrategy.strategy.platform} />
                 </div>
               </div>
 
