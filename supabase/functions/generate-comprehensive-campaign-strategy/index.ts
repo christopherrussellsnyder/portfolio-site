@@ -2,6 +2,13 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { serviceClient } from "../_shared/supabase.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { callLovableGateway } from "../_shared/llm-gateway.ts";
+import {
+  fetchSearchDemand,
+  fetchCompetitorAds,
+  crawlBusinessSite,
+  fetchVoiceOfCustomer,
+  type IntelResult,
+} from "../_shared/strategy-intel.ts";
 
 serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
@@ -132,6 +139,34 @@ serve(async (req) => {
       );
     }
 
+    // Live market grounding: this function generated every post from
+    // business-profile fields and static niche_strategies rows, with no real
+    // external signal at all -- unlike generate-strategy, which has used
+    // this exact same infrastructure (strategy-intel.ts) for a while. Same
+    // sources, same caching (strategy_intel_cache, 3-14 day TTLs), so this
+    // is usually a cheap DB read rather than a live fetch once a strategy or
+    // ad has already been generated for the same niche.
+    const groundingProducts = businessInfo?.primary_products_services || businessProfile?.products_services || '';
+    const groundingCompetitors = Array.isArray(businessInfo?.top_competitors)
+      ? businessInfo.top_competitors.map((c: any) => (typeof c === 'string' ? c : c?.name)).filter(Boolean).join(', ')
+      : '';
+    const groundingGeo = Array.isArray(businessInfo?.geographic_focus) ? businessInfo.geographic_focus.join(', ') : '';
+    const groundingWebsite = businessInfo?.website || businessProfile?.website || '';
+
+    const [searchIntel, adIntel, siteIntel, vocIntel] = await Promise.all([
+      fetchSearchDemand(supabase, finalNiche, groundingProducts, groundingGeo).catch(() => null),
+      fetchCompetitorAds(supabase, finalNiche, groundingCompetitors, finalPlatform, groundingGeo).catch(() => null),
+      crawlBusinessSite(supabase, groundingWebsite).catch(() => null),
+      fetchVoiceOfCustomer(supabase, finalNiche, groundingProducts).catch(() => null),
+    ]);
+    const groundingParts = [siteIntel, searchIntel, adIntel, vocIntel].filter(
+      (s): s is IntelResult => !!s?.ok && !!s.section,
+    );
+    const intelSources = groundingParts.map((s) => s.source);
+    const groundingSection = groundingParts.length
+      ? `\n${groundingParts.map((s) => s.section).join('\n\n')}\n\nGROUNDING RULES (mandatory):\n- Prefer the real search phrasing, product/site facts and customer language above over generic industry tropes.\n- Do not reuse the saturated angles shown in the competitor recon above -- differentiate from them explicitly.\n- Never invent a number, quote or claim that isn't in the material above.\n`
+      : '';
+
     const strategyContext = buildComprehensiveContext(
       finalPlatform,
       finalNiche,
@@ -142,7 +177,8 @@ serve(async (req) => {
       questionnaire,
       historicalPerformance || [],
       nicheStrategy,
-      mlTimes || []
+      mlTimes || [],
+      groundingSection
     );
 
     console.log('Calling AI with comprehensive context, length:', strategyContext.length);
@@ -288,6 +324,7 @@ Be specific, creative, and actionable. Use the business context to personalize e
       strategy.duration = finalDuration;
       strategy.generated_at = new Date().toISOString();
       strategy.questionnaire_used = !!questionnaire.primaryGoal;
+      strategy.grounding_sources = intelSources;
       
       // Ensure we have the correct number of posts
       if (strategy.content_calendar?.length < finalDuration) {
@@ -362,9 +399,18 @@ function buildComprehensiveContext(
   questionnaire: any,
   historicalPerformance: any[],
   nicheStrategy: any,
-  mlTimes: any[]
+  mlTimes: any[],
+  groundingSection: string = ''
 ): string {
   let context = `Generate a ${duration}-day content strategy with the following comprehensive context:\n\n`;
+
+  if (groundingSection) {
+    context += `═══════════════════════════════════════\n`;
+    context += `LIVE MARKET INTELLIGENCE\n`;
+    context += `═══════════════════════════════════════\n`;
+    context += groundingSection;
+    context += '\n';
+  }
   
   // === CAMPAIGN REQUIREMENTS ===
   context += `═══════════════════════════════════════\n`;
