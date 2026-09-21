@@ -17,6 +17,11 @@ export default defineConfig({
         __dirname,
         './supabase/functions/_shared/__mocks__/supabase-js-stub.ts',
       ),
+      // Deno's "npm:pkg@version" specifier form. The package itself is a
+      // regular npm dependency (see package.json), so this just strips the
+      // Deno-specific prefix/version pin back to the bare specifier Node
+      // already knows how to resolve.
+      'npm:zod@3.23.8': 'zod',
     },
   },
 });
