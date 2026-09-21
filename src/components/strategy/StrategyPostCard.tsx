@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
-import { 
-  Copy, Edit, Sparkles, Clock, Eye, Heart, Hash, 
-  ChevronDown, ChevronUp, Check, Image, Video, 
+import {
+  Copy, Edit, Sparkles, Clock, Eye, Heart, Hash,
+  ChevronDown, ChevronUp, Check, Image, Video,
   FileText, Layout, MessageCircle, Share2, Bookmark,
-  Lightbulb, Target, Palette, AlertCircle, Zap, ThumbsUp, Loader2, FlaskConical
+  Lightbulb, Target, Palette, AlertCircle, Zap, ThumbsUp, Loader2, FlaskConical, Gauge, TrendingUp, TrendingDown
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { DataSourceBadge } from '@/components/DataSourceBadge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from '@/hooks/use-toast';
@@ -24,6 +25,19 @@ import {
   angleForTheme,
   platformForPost,
 } from '@/lib/contentHandoff';
+
+interface EngagementPrediction {
+  overallScore: number;
+  grade: string;
+  predictedEngagementRate: string;
+  predictedImpressions: number;
+  predictedLikes: number;
+  predictedShares: number;
+  predictedComments: number;
+  confidence: 'high' | 'medium' | 'low';
+  factors: { factor: string; impact: number; description: string }[];
+  recommendations: { priority: string; action: string; example?: string; expectedImpact?: string }[];
+}
 
 interface CaptionVariant {
   label: string;
@@ -86,6 +100,14 @@ const confidenceColors: Record<string, string> = {
   Low: 'text-muted-foreground',
 };
 
+const gradeColors: Record<string, string> = {
+  A: 'border-emerald-500/50 text-emerald-500 bg-emerald-500/10',
+  B: 'border-primary/50 text-primary bg-primary/10',
+  C: 'border-amber-500/50 text-amber-500 bg-amber-500/10',
+  D: 'border-orange-500/50 text-orange-500 bg-orange-500/10',
+  F: 'border-destructive/50 text-destructive bg-destructive/10',
+};
+
 export function StrategyPostCard({ post, platform, onEdit, onAskAI }: StrategyPostCardProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
@@ -93,6 +115,8 @@ export function StrategyPostCard({ post, platform, onEdit, onAskAI }: StrategyPo
   const [activeCaption, setActiveCaption] = useState<string>(post.caption);
   const [loadingVariants, setLoadingVariants] = useState(false);
   const [showUpgrade, setShowUpgrade] = useState(false);
+  const [prediction, setPrediction] = useState<EngagementPrediction | null>(null);
+  const [loadingPrediction, setLoadingPrediction] = useState(false);
   const { isPro } = useSubscription();
   const navigate = useNavigate();
 
@@ -127,7 +151,29 @@ export function StrategyPostCard({ post, platform, onEdit, onAskAI }: StrategyPo
 
   const useVariant = (v: CaptionVariant) => {
     setActiveCaption(v.caption);
+    setPrediction(null);
     toast({ title: `${v.label} applied`, description: 'Caption swapped in for this post.' });
+  };
+
+  const predictEngagement = async () => {
+    setLoadingPrediction(true);
+    try {
+      const scheduledTime = post.post_date
+        ? `${post.post_date}T${(post.post_time || '12:00').slice(0, 5)}:00`
+        : undefined;
+      const { data, error } = await supabase.functions.invoke('predict-engagement', {
+        body: { content: activeCaption, platform, mediaUrls: [], scheduledTime },
+      });
+      if (error) throw new Error(await getFunctionErrorMessage(error, 'Prediction failed'));
+      if (data?.error) throw new Error(data.error);
+      if (!data?.prediction) throw new Error('No prediction returned');
+      setPrediction(data.prediction);
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'Try again in a moment.';
+      toast({ title: 'Could not predict engagement', description: message, variant: 'destructive' });
+    } finally {
+      setLoadingPrediction(false);
+    }
   };
 
 
@@ -395,6 +441,20 @@ export function StrategyPostCard({ post, platform, onEdit, onAskAI }: StrategyPo
                           )}
                           {variants.length ? 'Regenerate A/B' : 'Generate A/B variants'}
                         </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={predictEngagement}
+                          disabled={loadingPrediction || !activeCaption.trim()}
+                          className="gap-1"
+                        >
+                          {loadingPrediction ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : (
+                            <Gauge className="w-3 h-3" />
+                          )}
+                          {prediction ? 'Re-predict' : 'Predict engagement'}
+                        </Button>
                         <CopyButton text={activeCaption} field="caption" label="Copy" />
                       </div>
                     </div>
@@ -403,11 +463,91 @@ export function StrategyPostCard({ post, platform, onEdit, onAskAI }: StrategyPo
                     </p>
                     {activeCaption !== post.caption && (
                       <button
-                        onClick={() => setActiveCaption(post.caption)}
+                        onClick={() => {
+                          setActiveCaption(post.caption);
+                          setPrediction(null);
+                        }}
                         className="text-xs text-muted-foreground hover:text-foreground mt-1 underline"
                       >
                         Revert to original
                       </button>
+                    )}
+
+                    {prediction && (
+                      <div className="mt-3 p-3 rounded-md border border-border bg-muted/30 space-y-3">
+                        <div className="flex items-center justify-between flex-wrap gap-2">
+                          <div className="flex items-center gap-2">
+                            <Badge
+                              variant="outline"
+                              className={`text-sm font-bold w-7 h-7 justify-center p-0 ${gradeColors[prediction.grade] || ''}`}
+                            >
+                              {prediction.grade}
+                            </Badge>
+                            <div>
+                              <p className="text-xs font-medium text-foreground">
+                                {prediction.overallScore}/100 predicted score
+                              </p>
+                              <p className="text-[10px] text-muted-foreground">
+                                {prediction.confidence} confidence · {prediction.predictedEngagementRate}% est. engagement
+                              </p>
+                            </div>
+                          </div>
+                          <DataSourceBadge
+                            type={prediction.confidence === 'low' ? 'ai_estimated' : 'first_party'}
+                            showLabel={false}
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-4 gap-2">
+                          <div className="text-center p-1.5 bg-background/60 rounded-md">
+                            <p className="text-xs font-semibold text-foreground">
+                              {prediction.predictedImpressions.toLocaleString()}
+                            </p>
+                            <p className="text-[9px] text-muted-foreground">Impressions</p>
+                          </div>
+                          <div className="text-center p-1.5 bg-background/60 rounded-md">
+                            <p className="text-xs font-semibold text-foreground">{prediction.predictedLikes}</p>
+                            <p className="text-[9px] text-muted-foreground">Likes</p>
+                          </div>
+                          <div className="text-center p-1.5 bg-background/60 rounded-md">
+                            <p className="text-xs font-semibold text-foreground">{prediction.predictedShares}</p>
+                            <p className="text-[9px] text-muted-foreground">Shares</p>
+                          </div>
+                          <div className="text-center p-1.5 bg-background/60 rounded-md">
+                            <p className="text-xs font-semibold text-foreground">{prediction.predictedComments}</p>
+                            <p className="text-[9px] text-muted-foreground">Comments</p>
+                          </div>
+                        </div>
+
+                        {prediction.factors.length > 0 && (
+                          <ul className="space-y-1">
+                            {prediction.factors.slice(0, 4).map((f, i) => (
+                              <li key={i} className="flex items-start gap-1.5 text-xs">
+                                {f.impact >= 0 ? (
+                                  <TrendingUp className="w-3 h-3 text-emerald-500 mt-0.5 shrink-0" />
+                                ) : (
+                                  <TrendingDown className="w-3 h-3 text-destructive mt-0.5 shrink-0" />
+                                )}
+                                <span className="text-muted-foreground">{f.description}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+
+                        {prediction.recommendations.length > 0 && (
+                          <div className="pt-2 border-t border-border/50">
+                            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">
+                              Top recommendation
+                            </p>
+                            <p className="text-xs text-foreground">{prediction.recommendations[0].action}</p>
+                            {prediction.recommendations[0].example && (
+                              <p className="text-[11px] text-muted-foreground italic mt-0.5">
+                                {prediction.recommendations[0].example}
+                              </p>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     )}
 
                     {variants.length > 0 && (
