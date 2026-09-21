@@ -38,6 +38,23 @@ serve(async (req) => {
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     if (!LOVABLE_API_KEY) throw new Error('LOVABLE_API_KEY is not configured');
 
+    const admin = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+      { auth: { persistSession: false } },
+    );
+
+    // Voice fingerprint: a durable reference built from this business's own
+    // actually-published, measured-performance posts, not just the single
+    // post being varied — so "voice match" checks against real established
+    // voice, not a one-sample proxy. Fails open to '' (falls back to the
+    // original caption alone) if the RPC errors or there's no history yet.
+    const voiceCorpusPromise = admin
+      .rpc('get_top_performing_posts', { p_user_id: gate.userId, p_platform: platform || 'all', p_limit: 8 })
+      .then(({ data }: { data: { content: string }[] | null }) =>
+        (data ?? []).map((p) => p.content).filter(Boolean).join(' '))
+      .catch(() => '');
+
     // Over-generate, then keep the best two by objective score AND angle
     // distance. One call, same cost bracket — a wider candidate pool costs only
     // output tokens, and two near-identical variants make a worthless A/B test.
@@ -129,10 +146,13 @@ Generate ${CANDIDATE_POOL} distinct candidates now.`;
       .filter((v: any) => typeof v?.caption === 'string' && v.caption.trim().length > 20)
       .map((v: any) => ({ ...v, caption: String(v.caption).trim() }));
 
+    const voiceCorpus = await voiceCorpusPromise;
+    const voiceReference = [String(caption || ''), voiceCorpus].filter(Boolean).join(' ');
+
     const poolScores = pool.map((v: any) =>
       scoreCaption(v.caption, {
         platform: String(platform || ''),
-        voiceReference: String(caption || ''),
+        voiceReference,
         hook: String(v.hook || ''),
       }),
     );
@@ -169,12 +189,6 @@ Generate ${CANDIDATE_POOL} distinct candidates now.`;
     let registered: { label: string; variant_id: string }[] = [];
     if (variants.length) {
       try {
-        const admin = createClient(
-          Deno.env.get('SUPABASE_URL') ?? '',
-          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-          { auth: { persistSession: false } },
-        );
-
         const { data: test, error: testErr } = await admin
           .from('ab_tests')
           .insert({

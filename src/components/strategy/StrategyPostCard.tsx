@@ -30,6 +30,15 @@ interface CaptionVariant {
   angle?: string;
   hook?: string;
   caption: string;
+  selection_score?: number;
+  selection_dimensions?: {
+    hook_strength: number;
+    cta_clarity: number;
+    readability: number;
+    voice_match: number;
+    specificity: number;
+  };
+  selection_notes?: string[];
 }
 
 interface StrategyPostCardProps {
@@ -422,6 +431,16 @@ export function StrategyPostCard({ post, onEdit, onAskAI }: StrategyPostCardProp
                                 <p className="text-xs text-muted-foreground whitespace-pre-line max-h-32 overflow-y-auto">
                                   {v.caption}
                                 </p>
+                                {v.selection_dimensions && (
+                                  <div className="flex items-center gap-2 mt-2 flex-wrap">
+                                    <Badge variant="secondary" className="text-[10px]">
+                                      Score {v.selection_score}
+                                    </Badge>
+                                    <Badge variant="outline" className="text-[10px]">
+                                      Voice match {Math.round(v.selection_dimensions.voice_match * 100)}%
+                                    </Badge>
+                                  </div>
+                                )}
                                 <div className="flex items-center gap-2 mt-2">
                                   <Button
                                     size="sm"
