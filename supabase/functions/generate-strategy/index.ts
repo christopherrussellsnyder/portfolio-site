@@ -896,12 +896,24 @@ serve(async (req) => {
     // ========== INSIGHTS FEEDBACK LOOP ==========
     // Pull the user's actual historical performance and feed proven learnings back into prompts.
     const normalizedPlatform = normalizePlatformForIntel(platform);
-    const [topPostsRes, contentPatternsRes, optimalSlotsRes, baselineRes, topHashtagsRes] = await Promise.all([
+    const recentCampaignCutoff = new Date(Date.now() - 45 * 24 * 60 * 60 * 1000).toISOString();
+    const [topPostsRes, contentPatternsRes, optimalSlotsRes, baselineRes, topHashtagsRes, activeCampaignRes] = await Promise.all([
       supabase.rpc('get_top_performing_posts', { p_user_id: user.id, p_platform: normalizedPlatform, p_limit: 5 }),
       supabase.from('content_performance_patterns').select('pattern_type,pattern_value,avg_engagement_rate,post_count').eq('user_id', user.id).order('performance_score', { ascending: false }).limit(20),
       supabase.rpc('get_optimal_time_slots', { p_user_id: user.id, p_platform: normalizedPlatform, p_limit: 5 }),
       supabase.rpc('get_user_baseline_metrics', { p_user_id: user.id, p_platform: normalizedPlatform }),
       supabase.rpc('get_top_performing_elements', { p_user_id: user.id, p_element_type: 'hashtags', p_limit: 8 }),
+      // Cross-channel: is there a paid campaign this organic strategy should reinforce
+      // rather than contradict or duplicate?
+      supabase
+        .from('campaign_ai_strategies')
+        .select('platform, niche, objective, strategy_data, weekly_themes, created_at')
+        .eq('user_id', user.id)
+        .eq('generation_status', 'completed')
+        .gte('created_at', recentCampaignCutoff)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
     ]);
 
     const topPosts = topPostsRes.data || [];
@@ -909,6 +921,7 @@ serve(async (req) => {
     const slots = optimalSlotsRes.data || [];
     const baseline = (baselineRes.data && baselineRes.data[0]) || null;
     const topHashtags = topHashtagsRes.data || [];
+    const activeCampaign = activeCampaignRes.data || null;
 
     let performanceFeedbackSection = '';
     if (topPosts.length > 0 || patterns.length > 0 || slots.length > 0 || baseline) {
@@ -966,6 +979,28 @@ serve(async (req) => {
       performanceFeedbackSection = lines.join('\n');
     } else {
       performanceFeedbackSection = '=== PROVEN PERFORMANCE LEARNINGS ===\nNo historical performance data for this user yet. Use general best practices for now; future strategies will incorporate their actual results as posts are published and analytics uploaded.';
+    }
+
+    // Cross-channel: reinforce the active paid campaign instead of generating
+    // organic content in a vacuum that duplicates or contradicts it.
+    let campaignContextSection = '';
+    if (activeCampaign) {
+      const sd = (activeCampaign.strategy_data || {}) as any;
+      const overview = sd.overview || {};
+      const themeNames = (activeCampaign.weekly_themes || sd.weekly_themes || [])
+        .map((t: any) => t.name || t.objective)
+        .filter(Boolean)
+        .slice(0, 4);
+      const lines = [
+        `- Active paid campaign "${overview.campaign_name || 'Unnamed campaign'}" on ${activeCampaign.platform}, objective: ${activeCampaign.objective || overview.primary_objective || 'not specified'}.`,
+      ];
+      if (themeNames.length) {
+        lines.push(`- Its weekly themes: ${themeNames.join('; ')}.`);
+      }
+      campaignContextSection =
+        `=== ACTIVE PAID CAMPAIGN (this business's own current campaign — reinforce it, don't contradict or duplicate it) ===\n` +
+        lines.join('\n') +
+        `\nThe organic plan should complement this campaign's narrative where relevant (e.g. building trust/education around the same offer) rather than pursuing an unrelated angle in the same window.`;
     }
 
     // ========== STEP 0: External grounding (live, cached, fail-soft) ==========
@@ -1047,6 +1082,7 @@ serve(async (req) => {
     pushSignals(vocIntel?.section, vocIntel?.source || 'reddit', 'real_api');
     pushSignals(performanceFeedbackSection, 'performance_feedback_loop', 'first_party');
     pushSignals(seasonalitySection, 'seasonality:deterministic', 'real_api');
+    pushSignals(campaignContextSection, 'campaign_intelligence:active', 'first_party');
 
     const evidence = buildEvidenceLedger(rawSignals, evidenceQueryTerms);
     const evidenceSection = renderEvidenceLedger(evidence);
@@ -1061,7 +1097,7 @@ serve(async (req) => {
     const groundingTerms = extractGroundingTerms([
       siteIntel?.section, searchIntel?.section, adIntel?.section,
       vocIntel?.section, performanceFeedbackSection, promotionsSection,
-      ctx.products, ctx.uvp, ctx.businessName,
+      campaignContextSection, ctx.products, ctx.uvp, ctx.businessName,
     ]);
 
     const groundingSection = [
@@ -1070,6 +1106,7 @@ serve(async (req) => {
       searchIntel?.section,
       adIntel?.section,
       vocIntel?.section,
+      campaignContextSection,
       seasonalitySection,
       budgetSection,
       DIVERSITY_PROMPT,
