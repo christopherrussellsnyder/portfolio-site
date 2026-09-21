@@ -434,6 +434,11 @@ export default function ContentGeneration() {
                               {v.production_plan.scenes.length}-scene
                             </Badge>
                           )}
+                          {v.voice_match?.has_reference && (
+                            <Badge variant="outline" className="border-border text-[10px]">
+                              Voice match {Math.round(v.voice_match.voice_match * 100)}%
+                            </Badge>
+                          )}
                         </div>
                         {active && <Check className="w-3.5 h-3.5 text-primary" />}
                       </div>
