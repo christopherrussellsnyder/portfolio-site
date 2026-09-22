@@ -34,6 +34,7 @@ const ContentGeneration = lazy(() => import("./pages/ContentGeneration"));
 const ABTesting = lazy(() => import("./pages/ABTesting"));
 const Analytics = lazy(() => import("./pages/Analytics"));
 const Automation = lazy(() => import("./pages/Automation"));
+const AudienceTargeting = lazy(() => import("./pages/AudienceTargeting"));
 
 
 const HealthCheck = lazy(() => import("./pages/HealthCheck"));
@@ -176,11 +177,10 @@ const App = () => (
                   <Route path="/dashboard" element={<Navigate to="/ai-strategist" replace />} />
                   <Route path="/scheduler" element={<Navigate to="/ai-strategist" replace />} />
                   <Route path="/campaigns" element={<Navigate to="/ai-strategist" replace />} />
-                  {/* /ab-testing and /analytics used to redirect here; both are real pages again below */}
+                  {/* /ab-testing, /analytics and /audience-intelligence used to redirect here; all are real pages again below */}
                   <Route path="/audience" element={<Navigate to="/ai-strategist" replace />} />
                   <Route path="/content-ai" element={<Navigate to="/ai-strategist" replace />} />
                   <Route path="/ai-analytics" element={<Navigate to="/insights" replace />} />
-                  <Route path="/audience-intelligence" element={<Navigate to="/ai-strategist" replace />} />
                   <Route path="/ai-assistant" element={<Navigate to="/ai-strategist" replace />} />
                   <Route path="/intelligence" element={<Navigate to="/ai-strategist" replace />} />
                   <Route path="/media-library" element={<Navigate to="/media" replace />} />
@@ -274,6 +274,14 @@ const App = () => (
                     element={
                       <ProtectedRoute>
                         <Automation />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/audience-intelligence"
+                    element={
+                      <ProtectedRoute>
+                        <AudienceTargeting />
                       </ProtectedRoute>
                     }
                   />
