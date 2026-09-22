@@ -1,8 +1,9 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import { serviceClient, userClient } from "../_shared/supabase.ts";
+import { serviceClient } from "../_shared/supabase.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { callLovableGateway } from "../_shared/llm-gateway.ts";
 import { fetchSearchDemand, fetchCompetitorAds, fetchVoiceOfCustomer, type IntelResult } from "../_shared/strategy-intel.ts";
+import { requirePro } from "../_shared/require-pro.ts";
 
 interface BusinessProfile {
   business_name: string;
@@ -27,19 +28,13 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Real cost per call: one LLM generation plus up to 3 external API calls
+  // (search demand, competitor ad recon, voice of customer) for the grounding
+  // this function now does. Same tier gate generate-caption-variants uses.
+  const gate = await requirePro(req);
+  if (gate instanceof Response) return gate;
+
   try {
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
-      throw new Error('No authorization header');
-    }
-
-    const supabase = userClient(authHeader);
-
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
-    if (userError || !user) {
-      throw new Error('Unauthorized');
-    }
-
     const { businessProfile } = await req.json() as { businessProfile: BusinessProfile };
 
     // Live market grounding: without this, interests/keywords/hashtags/job-titles
@@ -186,10 +181,10 @@ Ensure all recommendations are specific, actionable, and directly applicable to 
     for (const platform of platforms) {
       const platformData = platform === 'facebook' ? recommendations.facebook_instagram : recommendations[platform];
 
-      await supabase
+      await admin
         .from('audience_insights')
         .upsert({
-          user_id: user.id,
+          user_id: gate.userId,
           platform,
           insight_type: 'targeting_recommendation',
           targeting_parameters: platformData || {},

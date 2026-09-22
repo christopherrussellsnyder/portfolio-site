@@ -14,6 +14,8 @@ import {
 
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useSubscription } from '@/contexts/SubscriptionContext';
+import { UpgradeModal } from '@/components/UpgradeModal';
 import { toast } from '@/hooks/use-toast';
 import { DataSourceBadge } from '@/components/DataSourceBadge';
 
@@ -132,6 +134,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 export default function AudienceTargeting() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { isPro } = useSubscription();
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [profile, setProfile] = useState<BusinessProfile | null>(null);
@@ -139,6 +142,7 @@ export default function AudienceTargeting() {
   const [intelSources, setIntelSources] = useState<string[]>([]);
   const [lastGenerated, setLastGenerated] = useState<string | null>(null);
   const [profileIncomplete, setProfileIncomplete] = useState(false);
+  const [showUpgrade, setShowUpgrade] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -218,6 +222,10 @@ export default function AudienceTargeting() {
 
   const generate = async () => {
     if (!profile) return;
+    if (!isPro) {
+      setShowUpgrade(true);
+      return;
+    }
     setGenerating(true);
     try {
       const { data, error } = await supabase.functions.invoke('analyze-audience-targeting', {
@@ -256,6 +264,7 @@ export default function AudienceTargeting() {
 
   return (
     <>
+      <UpgradeModal open={showUpgrade} onClose={() => setShowUpgrade(false)} />
       <Helmet>
         <title>Audience Targeting | Korex Intelligence</title>
         <meta
