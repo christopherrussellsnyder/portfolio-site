@@ -64,17 +64,24 @@ serve(async (req) => {
           { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
 
-      const { data: publishedPosts, error: postsErr } = await supabase
-        .from('scheduled_posts')
-        .select('user_id')
-        .eq('status', 'published')
-        .not('impressions', 'is', null)
-        .gt('impressions', 0);
-      if (postsErr) throw postsErr;
-
+      // Unbounded across every user on the platform, so this can exceed
+      // PostgREST's default row cap (1000) once total published-post volume
+      // grows -- paginate rather than risk silently truncating eligible users.
       const counts = new Map<string, number>();
-      for (const row of publishedPosts || []) {
-        counts.set(row.user_id, (counts.get(row.user_id) || 0) + 1);
+      const PAGE_SIZE = 1000;
+      for (let offset = 0; ; offset += PAGE_SIZE) {
+        const { data: page, error: postsErr } = await supabase
+          .from('scheduled_posts')
+          .select('user_id')
+          .eq('status', 'published')
+          .not('impressions', 'is', null)
+          .gt('impressions', 0)
+          .range(offset, offset + PAGE_SIZE - 1);
+        if (postsErr) throw postsErr;
+        for (const row of page || []) {
+          counts.set(row.user_id, (counts.get(row.user_id) || 0) + 1);
+        }
+        if (!page || page.length < PAGE_SIZE) break;
       }
       const eligibleUserIds = [...counts.entries()].filter(([, n]) => n >= 10).map(([id]) => id);
 

@@ -142,6 +142,11 @@ export default function AudienceTargeting() {
   const [intelSources, setIntelSources] = useState<string[]>([]);
   const [lastGenerated, setLastGenerated] = useState<string | null>(null);
   const [profileIncomplete, setProfileIncomplete] = useState(false);
+  // recommendation_score encodes how many grounding sources backed the run
+  // (base 55 + 15/source) -- reconstructing from persisted rows can't recover
+  // the exact source list, but this is enough to badge it honestly rather
+  // than defaulting to "AI-estimated" for data that was actually grounded.
+  const [wasGrounded, setWasGrounded] = useState(false);
   const [showUpgrade, setShowUpgrade] = useState(false);
 
   useEffect(() => {
@@ -199,9 +204,11 @@ export default function AudienceTargeting() {
       if (rows.length) {
         const byPlatform: Record<string, unknown> = {};
         let latest = '';
+        let maxScore = 0;
         for (const row of rows) {
           byPlatform[row.platform] = row.targeting_parameters;
           if (row.analysis_date && row.analysis_date > latest) latest = row.analysis_date;
+          if (typeof row.recommendation_score === 'number') maxScore = Math.max(maxScore, row.recommendation_score);
         }
         setRecommendations({
           facebook_instagram: byPlatform.facebook as FbIgTargeting,
@@ -210,6 +217,7 @@ export default function AudienceTargeting() {
           tiktok: byPlatform.tiktok as TikTokTargeting,
         });
         setLastGenerated(latest || null);
+        setWasGrounded(maxScore > 55);
       }
 
       setLoading(false);
@@ -235,6 +243,7 @@ export default function AudienceTargeting() {
       if (data?.error) throw new Error(data.error);
       setRecommendations(data.recommendations);
       setIntelSources(data.intel_sources || []);
+      setWasGrounded(false); // fresh intelSources now drives the badge directly
       setLastGenerated(new Date().toISOString());
       toast({ title: 'Targeting recommendations updated' });
     } catch (e) {
@@ -284,7 +293,7 @@ export default function AudienceTargeting() {
                 <Users className="w-4 h-4 text-primary" />
                 <h1 className="text-xl font-semibold tracking-tight">Audience Targeting</h1>
               </div>
-              {intelSources.length > 0 ? (
+              {intelSources.length > 0 || wasGrounded ? (
                 <DataSourceBadge type="real_api" />
               ) : (
                 <DataSourceBadge type="ai_estimated" />
