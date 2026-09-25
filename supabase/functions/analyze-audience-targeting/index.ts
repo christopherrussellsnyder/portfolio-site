@@ -5,6 +5,16 @@ import { callLovableGateway } from "../_shared/llm-gateway.ts";
 import { fetchSearchDemand, fetchCompetitorAds, fetchVoiceOfCustomer, type IntelResult } from "../_shared/strategy-intel.ts";
 import { requirePro } from "../_shared/require-pro.ts";
 
+// This is the one LLM-calling function in the codebase still on a
+// non-Gemini provider (openai/gpt-5-mini), with no comment explaining why --
+// everything else converged on google/gemini-3-flash-preview for creative/
+// reasoning work (proven in 8+ functions) via an env-var override rather
+// than a blind swap, same reasoning as generate-strategy's
+// STRATEGY_MODEL_OVERRIDE. Kept the current model as the default since it's
+// the one actually verified working here; this just makes trying the
+// converged tier a config change instead of a code change.
+const MODEL = Deno.env.get('AUDIENCE_TARGETING_MODEL_OVERRIDE') || 'openai/gpt-5-mini';
+
 interface BusinessProfile {
   business_name: string;
   industry: string;
@@ -137,7 +147,7 @@ Ensure all recommendations are specific, actionable, and directly applicable to 
 
     if (lovableApiKey) {
       const aiResponse = await callLovableGateway(lovableApiKey, {
-        model: 'openai/gpt-5-mini',
+        model: MODEL,
         messages: [
           {
             role: 'system',
