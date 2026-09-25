@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Settings, User, HelpCircle, LogOut, CreditCard, ChevronUp, BarChart3, FileText, Image, Sparkles, Clapperboard, Sun, Moon, FlaskConical, LineChart, Workflow, Users } from 'lucide-react';
+import { Settings, User, HelpCircle, LogOut, CreditCard, ChevronUp, BarChart3, FileText, Image, Sparkles, Clapperboard, Sun, Moon, FlaskConical, LineChart, Workflow, Users, Radar } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useSubscription } from '@/contexts/SubscriptionContext';
@@ -211,6 +211,14 @@ export function UserProfileMenu() {
           >
             <Users className="w-4 h-4 text-muted-foreground" />
             <span className="text-sm">Audience Targeting</span>
+          </DropdownMenuItem>
+
+          <DropdownMenuItem
+            className="flex items-center gap-3 px-3 py-2.5 cursor-pointer rounded-md hover:bg-surface-tertiary focus:bg-surface-tertiary transition-colors"
+            onClick={() => navigate('/competitor-monitoring')}
+          >
+            <Radar className="w-4 h-4 text-muted-foreground" />
+            <span className="text-sm">Competitor Monitoring</span>
           </DropdownMenuItem>
 
           <DropdownMenuSeparator className="bg-[hsl(var(--border-subtle))]" />

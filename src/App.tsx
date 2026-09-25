@@ -35,6 +35,7 @@ const ABTesting = lazy(() => import("./pages/ABTesting"));
 const Analytics = lazy(() => import("./pages/Analytics"));
 const Automation = lazy(() => import("./pages/Automation"));
 const AudienceTargeting = lazy(() => import("./pages/AudienceTargeting"));
+const CompetitorMonitoring = lazy(() => import("./pages/CompetitorMonitoring"));
 
 
 const HealthCheck = lazy(() => import("./pages/HealthCheck"));
@@ -282,6 +283,14 @@ const App = () => (
                     element={
                       <ProtectedRoute>
                         <AudienceTargeting />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/competitor-monitoring"
+                    element={
+                      <ProtectedRoute>
+                        <CompetitorMonitoring />
                       </ProtectedRoute>
                     }
                   />
