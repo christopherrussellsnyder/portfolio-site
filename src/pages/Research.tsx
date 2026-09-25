@@ -29,8 +29,99 @@ import {
   User,
   Rocket,
   Layers,
+  Link2,
+  Radar,
+  Compass,
+  ArrowUpRight,
+  ArrowDownRight,
+  Globe,
 } from 'lucide-react';
 import { DataSourceBadge, type DataSourceType } from '@/components/DataSourceBadge';
+
+type EvidenceGrade = 'A' | 'B' | 'C' | 'D';
+
+interface CorroboratedClaim {
+  text: string;
+  sources: string[];
+  sourceTypes: string[];
+  independentSources: number;
+  corroborationScore: number;
+  grade: EvidenceGrade;
+  restatements: number;
+}
+
+interface ChangePointResult {
+  detected: boolean;
+  index: number | null;
+  at: string | null;
+  direction: 'rise' | 'drop' | null;
+  meanBefore: number | null;
+  meanAfter: number | null;
+  shift: number | null;
+  observations: number;
+  note: string;
+  decay_weighted_engagement_rate: number | null;
+  effective_sample_size: number;
+  basis: string;
+}
+
+interface EmergingTopic {
+  term: string;
+  recentCount: number;
+  priorCount: number;
+  burst: number;
+  status: 'emerging' | 'growing' | 'steady' | 'declining';
+  isNew: boolean;
+}
+
+interface LinkedClaim {
+  claim: string;
+  supporting: { text: string; source: string; sourceType: string; match: number }[];
+  contradicting: { text: string; source: string; sourceType: string }[];
+  grade: EvidenceGrade;
+  basis: 'measured' | 'corroborated' | 'single_source' | 'unsupported';
+  note: string;
+}
+
+interface ResolvedEntity {
+  canonical: string;
+  aliases: string[];
+  mentions: number;
+  sources: string[];
+  shareOfVoice: number;
+}
+
+interface CoverageGap {
+  topic: string;
+  marketMentions: number;
+  yourMentions: number;
+  gapScore: number;
+  type: 'uncovered' | 'underweighted' | 'overweighted' | 'aligned';
+}
+
+interface ResearchIntelligence {
+  computed: boolean;
+  method?: string;
+  error?: string;
+  cross_source_corroboration?: { claims: CorroboratedClaim[]; note: string };
+  change_point?: ChangePointResult;
+  decay_model?: {
+    platform_half_life_days: number;
+    current_report: { weight: number; ageDays: number | null; halfLifeDays: number; status: string };
+    note: string;
+  };
+  emerging_topics?: { topics: EmergingTopic[]; windows_compared: number; note: string };
+  claim_evidence?: { claims: LinkedClaim[]; grading: string };
+  entities?: { resolved: ResolvedEntity[]; note: string };
+  gap_analysis?: { gaps: CoverageGap[]; evidenceGaps: string[]; comparedTopics: number; note: string };
+}
+
+interface FirstPartyCorroboration {
+  checked: boolean;
+  posts_compared?: number;
+  confirmed_by_your_data?: string[];
+  note: string;
+}
 
 interface Personalization {
   positioning_summary?: string;
@@ -69,6 +160,10 @@ interface ResearchReport {
   pitfalls_to_avoid?: string[];
   data_source_type?: DataSourceType;
   data_source_note?: string;
+  /** Which real external sources (e.g. "semrush:us", "meta-ad-library", "reddit") actually grounded this report. */
+  grounding_sources?: string[];
+  research_intelligence?: ResearchIntelligence;
+  first_party_corroboration?: FirstPartyCorroboration;
   _starter_capped?: boolean;
 }
 
@@ -356,6 +451,139 @@ export default function Research() {
                   Strategies — always take priority over these estimates.
                 </p>
               </div>
+
+              {report.research_intelligence?.computed && (
+                <Section title="Research Intelligence" icon={<Link2 className="w-4 h-4" />}>
+                  <div className="space-y-4">
+                    <div className="flex flex-wrap items-center gap-2">
+                      {report.grounding_sources && report.grounding_sources.length > 0 ? (
+                        <>
+                          <span className="text-xs text-muted-foreground flex items-center gap-1">
+                            <Globe className="w-3 h-3" /> Grounded in real data:
+                          </span>
+                          {report.grounding_sources.map((s) => (
+                            <Badge
+                              key={s}
+                              variant="outline"
+                              className="border-emerald-500/40 text-emerald-500 bg-emerald-500/10 text-[10px]"
+                            >
+                              {s}
+                            </Badge>
+                          ))}
+                        </>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">
+                          No live grounding sources returned data this run — patterns below are model estimates.
+                        </span>
+                      )}
+                    </div>
+
+                    {report.first_party_corroboration?.note && (
+                      <p className="text-xs text-muted-foreground">
+                        {report.first_party_corroboration.note}
+                      </p>
+                    )}
+
+                    {!!report.research_intelligence.cross_source_corroboration?.claims?.length && (
+                      <div>
+                        <p className="text-xs uppercase tracking-wider text-primary mb-2">
+                          Best-supported claims
+                        </p>
+                        <div className="space-y-1.5">
+                          {report.research_intelligence.cross_source_corroboration.claims
+                            .slice(0, 5)
+                            .map((c, i) => (
+                              <div
+                                key={i}
+                                className="rounded-lg border border-card bg-background p-3 flex items-start gap-3"
+                              >
+                                <GradeBadge grade={c.grade} />
+                                <div className="min-w-0">
+                                  <p className="text-sm text-foreground/90 line-clamp-2">{c.text}</p>
+                                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                                    {c.independentSources} independent source
+                                    {c.independentSources === 1 ? '' : 's'}
+                                    {c.restatements > c.independentSources
+                                      ? ` (${c.restatements} mentions)`
+                                      : ''}
+                                  </p>
+                                </div>
+                              </div>
+                            ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {!!report.research_intelligence.emerging_topics?.topics?.length && (
+                      <div>
+                        <p className="text-xs uppercase tracking-wider text-primary mb-2 flex items-center gap-1">
+                          <Radar className="w-3 h-3" /> Emerging this week
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {report.research_intelligence.emerging_topics.topics.slice(0, 8).map((t, i) => (
+                            <Badge
+                              key={i}
+                              variant="outline"
+                              className={
+                                t.status === 'emerging'
+                                  ? 'border-primary text-primary'
+                                  : t.status === 'growing'
+                                  ? 'border-emerald-500/40 text-emerald-500'
+                                  : 'border-muted text-muted-foreground'
+                              }
+                            >
+                              {t.term} {t.isNew ? '· new' : `· ${t.burst}x`}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {!!report.research_intelligence.gap_analysis?.gaps?.filter(
+                      (g) => g.type === 'uncovered' || g.type === 'underweighted',
+                    ).length && (
+                      <div>
+                        <p className="text-xs uppercase tracking-wider text-primary mb-2 flex items-center gap-1">
+                          <Compass className="w-3 h-3" /> Coverage gaps vs. your content
+                        </p>
+                        <div className="space-y-1.5">
+                          {report.research_intelligence.gap_analysis.gaps
+                            .filter((g) => g.type === 'uncovered' || g.type === 'underweighted')
+                            .slice(0, 5)
+                            .map((g, i) => (
+                              <div
+                                key={i}
+                                className="rounded-lg border border-card bg-background p-3 flex items-center justify-between gap-3"
+                              >
+                                <span className="text-sm">{g.topic}</span>
+                                <Badge
+                                  variant="outline"
+                                  className="border-amber-500/40 text-amber-500 text-[10px] shrink-0"
+                                >
+                                  {g.type === 'uncovered' ? 'not covered yet' : 'underweighted'}
+                                </Badge>
+                              </div>
+                            ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {report.research_intelligence.change_point?.detected && (
+                      <div className="rounded-lg border border-card bg-background p-3 flex items-start gap-3">
+                        {report.research_intelligence.change_point.direction === 'rise' ? (
+                          <ArrowUpRight className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                        ) : (
+                          <ArrowDownRight className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                        )}
+                        <p className="text-sm text-foreground/90">
+                          {report.research_intelligence.change_point.note}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </Section>
+              )}
+
               {tier === 'pro' && (
                 <div className="rounded-xl border border-primary/30 bg-gradient-to-br from-primary/10 via-background to-background p-5">
                   <div className="flex items-center gap-2 mb-3">
@@ -684,6 +912,26 @@ export default function Research() {
         </div>
       </div>
     </>
+  );
+}
+
+const GRADE_CONFIG: Record<EvidenceGrade, { label: string; className: string }> = {
+  A: { label: 'A — measured or multi-source', className: 'border-primary/50 text-primary bg-primary/10' },
+  B: { label: 'B — corroborated across sources', className: 'border-emerald-500/40 text-emerald-500 bg-emerald-500/10' },
+  C: { label: 'C — single source', className: 'border-amber-500/50 text-amber-500 bg-amber-500/10' },
+  D: { label: 'D — unsupported', className: 'border-muted-foreground/30 text-muted-foreground bg-muted/20' },
+};
+
+function GradeBadge({ grade }: { grade: EvidenceGrade }) {
+  const cfg = GRADE_CONFIG[grade] ?? GRADE_CONFIG.D;
+  return (
+    <Badge
+      variant="outline"
+      title={cfg.label}
+      className={`gap-1 font-medium shrink-0 ${cfg.className}`}
+    >
+      {grade}
+    </Badge>
   );
 }
 

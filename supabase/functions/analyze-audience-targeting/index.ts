@@ -1,6 +1,19 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import { serviceClient, userClient } from "../_shared/supabase.ts";
+import { serviceClient } from "../_shared/supabase.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { callLovableGateway } from "../_shared/llm-gateway.ts";
+import { fetchSearchDemand, fetchCompetitorAds, fetchVoiceOfCustomer, type IntelResult } from "../_shared/strategy-intel.ts";
+import { requirePro } from "../_shared/require-pro.ts";
+
+// This is the one LLM-calling function in the codebase still on a
+// non-Gemini provider (openai/gpt-5-mini), with no comment explaining why --
+// everything else converged on google/gemini-3-flash-preview for creative/
+// reasoning work (proven in 8+ functions) via an env-var override rather
+// than a blind swap, same reasoning as generate-strategy's
+// STRATEGY_MODEL_OVERRIDE. Kept the current model as the default since it's
+// the one actually verified working here; this just makes trying the
+// converged tier a config change instead of a code change.
+const MODEL = Deno.env.get('AUDIENCE_TARGETING_MODEL_OVERRIDE') || 'openai/gpt-5-mini';
 
 interface BusinessProfile {
   business_name: string;
@@ -25,23 +38,40 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Real cost per call: one LLM generation plus up to 3 external API calls
+  // (search demand, competitor ad recon, voice of customer) for the grounding
+  // this function now does. Same tier gate generate-caption-variants uses.
+  const gate = await requirePro(req);
+  if (gate instanceof Response) return gate;
+
   try {
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
-      throw new Error('No authorization header');
-    }
-
-    const supabase = userClient(authHeader);
-
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
-    if (userError || !user) {
-      throw new Error('Unauthorized');
-    }
-
     const { businessProfile } = await req.json() as { businessProfile: BusinessProfile };
 
+    // Live market grounding: without this, interests/keywords/hashtags/job-titles
+    // are pure model priors about ad-platform taxonomy — generic and stale. Ground
+    // them in real search demand, currently-running competitor ads and real
+    // customer language, same sources strategy/caption/ad-script generation use.
+    const admin = serviceClient();
+    const industry = businessProfile.industry || "general";
+    const products = businessProfile.products_services || "";
+    const competitors = (businessProfile.competitor_names || []).join(", ");
+    const geo = (businessProfile.target_locations || []).join(", ");
+
+    const [searchIntel, adIntel, vocIntel] = await Promise.all([
+      fetchSearchDemand(admin, industry, products, geo).catch(() => null),
+      fetchCompetitorAds(admin, industry, competitors, "meta", geo).catch(() => null),
+      fetchVoiceOfCustomer(admin, industry, products).catch(() => null),
+    ]);
+    const groundingParts = [searchIntel, adIntel, vocIntel].filter(
+      (s): s is IntelResult => !!s?.ok && !!s.section,
+    );
+    const intelSources = groundingParts.map((s) => s.source);
+    const groundingBlock = groundingParts.length
+      ? `\n\n${groundingParts.map((s) => s.section).join("\n\n")}\n\nGROUNDING RULES (mandatory):\n- Pull "keywords", "hashtags", "interests" and "conversation_topics" from the real search phrasing and customer language above wherever it fits the platform, instead of inventing generic marketing terms.\n- Do not target the saturated angles shown in the competitor ad recon above — note in key_insights where this business can differentiate instead.\n- Never state a specific audience size, reach estimate or performance number that isn't in the material above.`
+      : "";
+
     // Build AI prompt for audience targeting recommendations
-    const prompt = `You are an expert digital marketing strategist specializing in audience targeting across social media platforms. 
+    const prompt = `You are an expert digital marketing strategist specializing in audience targeting across social media platforms.
 
 Based on the following business profile, provide detailed, platform-specific audience targeting recommendations:
 
@@ -59,6 +89,7 @@ Business Profile:
 - Price Point: ${businessProfile.price_point || 'Medium'}
 - Unique Selling Points: ${businessProfile.unique_selling_points?.join(', ') || 'Not specified'}
 - Competitors: ${businessProfile.competitor_names?.join(', ') || 'Not specified'}
+${groundingBlock}
 
 Provide targeting recommendations in the following JSON format:
 {
@@ -115,27 +146,20 @@ Ensure all recommendations are specific, actionable, and directly applicable to 
     let recommendations;
 
     if (lovableApiKey) {
-      const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${lovableApiKey}`,
-        },
-        body: JSON.stringify({
-          model: 'openai/gpt-5-mini',
-          messages: [
-            {
-              role: 'system',
-              content: 'You are an expert digital marketing strategist. Always respond with valid JSON only, no additional text.'
-            },
-            {
-              role: 'user',
-              content: prompt
-            }
-          ],
-          temperature: 0.7,
-          max_tokens: 4000,
-        }),
+      const aiResponse = await callLovableGateway(lovableApiKey, {
+        model: MODEL,
+        messages: [
+          {
+            role: 'system',
+            content: 'You are an expert digital marketing strategist. Always respond with valid JSON only, no additional text.'
+          },
+          {
+            role: 'user',
+            content: prompt
+          }
+        ],
+        temperature: 0.7,
+        max_tokens: 4000,
       });
 
       if (!aiResponse.ok) {
@@ -158,18 +182,23 @@ Ensure all recommendations are specific, actionable, and directly applicable to 
     }
 
     // Store insights in database
+    // Score reflects how much real grounding backs these recommendations (base
+    // 55 + 15 per live source that returned data) rather than a fabricated
+    // number — was previously Math.random() * 30 + 70, which asserted
+    // confidence with zero basis.
+    const groundingScore = Math.min(100, 55 + groundingParts.length * 15);
     const platforms = ['facebook', 'linkedin', 'twitter', 'tiktok'];
     for (const platform of platforms) {
       const platformData = platform === 'facebook' ? recommendations.facebook_instagram : recommendations[platform];
-      
-      await supabase
+
+      await admin
         .from('audience_insights')
         .upsert({
-          user_id: user.id,
+          user_id: gate.userId,
           platform,
           insight_type: 'targeting_recommendation',
           targeting_parameters: platformData || {},
-          recommendation_score: Math.random() * 30 + 70, // 70-100 score
+          recommendation_score: groundingScore,
           analysis_date: new Date().toISOString(),
         }, {
           onConflict: 'user_id,platform',
@@ -178,9 +207,10 @@ Ensure all recommendations are specific, actionable, and directly applicable to 
     }
 
     return new Response(
-      JSON.stringify({ 
-        success: true, 
+      JSON.stringify({
+        success: true,
         recommendations,
+        intel_sources: intelSources,
         message: 'Targeting recommendations generated successfully'
       }),
       { 

@@ -1,6 +1,24 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { serviceClient } from "../_shared/supabase.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { callLovableGateway } from "../_shared/llm-gateway.ts";
+import {
+  fetchSearchDemand,
+  fetchCompetitorAds,
+  crawlBusinessSite,
+  fetchVoiceOfCustomer,
+  type IntelResult,
+} from "../_shared/strategy-intel.ts";
+
+// This generates a full multi-day content calendar in one call -- the same
+// class of creative/reasoning work generate-strategy's MODEL_CREATIVE tier
+// handles, which already uses gemini-3-flash-preview successfully across
+// ai-chat, campaign-intelligence, generate-client-report, generate-post-visual,
+// refresh-campaign-intelligence and support-chat. This function was still on
+// the older gemini-2.5-flash tier. Shares generate-strategy's
+// STRATEGY_MODEL_OVERRIDE env var rather than a separate one, so trying a
+// stronger model is one Supabase dashboard change for both generators.
+const MODEL_CREATIVE = Deno.env.get('STRATEGY_MODEL_OVERRIDE') || 'google/gemini-3-flash-preview';
 
 serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
@@ -9,19 +27,37 @@ serve(async (req) => {
   }
 
   try {
-    const { 
-      userId, 
-      platform, 
-      niche, 
-      objective, 
-      businessProfileId, 
+    const supabase = serviceClient();
+
+    // Service-role client bypasses RLS; this previously trusted a
+    // client-supplied userId to read another account's business
+    // information, and looked up businessProfileId/requestId with no
+    // ownership check at all. Derive userId from the verified token and
+    // scope every lookup to it.
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return new Response(JSON.stringify({ error: 'Authentication required' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+    const { data: authData, error: authErr } = await supabase.auth.getUser(
+      authHeader.replace('Bearer ', ''),
+    );
+    if (authErr || !authData.user) {
+      return new Response(JSON.stringify({ error: 'Invalid session' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+    const userId = authData.user.id;
+
+    const {
+      platform,
+      niche,
+      objective,
+      businessProfileId,
       duration = 30,
       requestId,
-      questionnaireData 
+      questionnaireData
     } = await req.json();
-    
-    const supabase = serviceClient();
-    
+
     console.log('Generating comprehensive strategy for:', { userId, platform, niche, objective, requestId });
 
     // Fetch questionnaire data if requestId provided
@@ -31,6 +67,7 @@ serve(async (req) => {
         .from('campaign_strategy_requests')
         .select('*')
         .eq('id', requestId)
+        .eq('user_id', userId)
         .single();
       campaignRequest = data;
     }
@@ -39,18 +76,12 @@ serve(async (req) => {
     const questionnaire = questionnaireData || campaignRequest || {};
 
     // Fetch comprehensive business information
-    let businessInfo: any = null;
-    if (userId) {
-      const { data: bizInfo } = await supabase
-        .from('business_information')
-        .select('*')
-        .eq('user_id', userId)
-        .single();
-      
-      if (bizInfo) {
-        businessInfo = bizInfo;
-      }
-    }
+    const { data: bizInfo } = await supabase
+      .from('business_information')
+      .select('*')
+      .eq('user_id', userId)
+      .single();
+    let businessInfo: any = bizInfo ?? null;
 
     // Fallback to legacy business_profiles if no business_information
     let businessProfile: any = null;
@@ -59,9 +90,10 @@ serve(async (req) => {
         .from('business_profiles')
         .select('*')
         .eq('id', businessProfileId)
+        .eq('user_id', userId)
         .single();
       businessProfile = data;
-    } else if (userId && !businessInfo) {
+    } else if (!businessInfo) {
       const { data } = await supabase
         .from('business_profiles')
         .select('*')
@@ -117,6 +149,34 @@ serve(async (req) => {
       );
     }
 
+    // Live market grounding: this function generated every post from
+    // business-profile fields and static niche_strategies rows, with no real
+    // external signal at all -- unlike generate-strategy, which has used
+    // this exact same infrastructure (strategy-intel.ts) for a while. Same
+    // sources, same caching (strategy_intel_cache, 3-14 day TTLs), so this
+    // is usually a cheap DB read rather than a live fetch once a strategy or
+    // ad has already been generated for the same niche.
+    const groundingProducts = businessInfo?.primary_products_services || businessProfile?.products_services || '';
+    const groundingCompetitors = Array.isArray(businessInfo?.top_competitors)
+      ? businessInfo.top_competitors.map((c: any) => (typeof c === 'string' ? c : c?.name)).filter(Boolean).join(', ')
+      : '';
+    const groundingGeo = Array.isArray(businessInfo?.geographic_focus) ? businessInfo.geographic_focus.join(', ') : '';
+    const groundingWebsite = businessInfo?.website || businessProfile?.website || '';
+
+    const [searchIntel, adIntel, siteIntel, vocIntel] = await Promise.all([
+      fetchSearchDemand(supabase, finalNiche, groundingProducts, groundingGeo).catch(() => null),
+      fetchCompetitorAds(supabase, finalNiche, groundingCompetitors, finalPlatform, groundingGeo).catch(() => null),
+      crawlBusinessSite(supabase, groundingWebsite).catch(() => null),
+      fetchVoiceOfCustomer(supabase, finalNiche, groundingProducts).catch(() => null),
+    ]);
+    const groundingParts = [siteIntel, searchIntel, adIntel, vocIntel].filter(
+      (s): s is IntelResult => !!s?.ok && !!s.section,
+    );
+    const intelSources = groundingParts.map((s) => s.source);
+    const groundingSection = groundingParts.length
+      ? `\n${groundingParts.map((s) => s.section).join('\n\n')}\n\nGROUNDING RULES (mandatory):\n- Prefer the real search phrasing, product/site facts and customer language above over generic industry tropes.\n- Do not reuse the saturated angles shown in the competitor recon above -- differentiate from them explicitly.\n- Never invent a number, quote or claim that isn't in the material above.\n`
+      : '';
+
     const strategyContext = buildComprehensiveContext(
       finalPlatform,
       finalNiche,
@@ -127,19 +187,14 @@ serve(async (req) => {
       questionnaire,
       historicalPerformance || [],
       nicheStrategy,
-      mlTimes || []
+      mlTimes || [],
+      groundingSection
     );
 
     console.log('Calling AI with comprehensive context, length:', strategyContext.length);
 
-    const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
+    const aiResponse = await callLovableGateway(LOVABLE_API_KEY, {
+        model: MODEL_CREATIVE,
         messages: [
           {
             role: 'system',
@@ -254,7 +309,6 @@ Be specific, creative, and actionable. Use the business context to personalize e
           }
         ],
         tool_choice: { type: 'function', function: { name: 'generate_campaign_strategy' } }
-      }),
     });
 
     if (!aiResponse.ok) {
@@ -280,6 +334,7 @@ Be specific, creative, and actionable. Use the business context to personalize e
       strategy.duration = finalDuration;
       strategy.generated_at = new Date().toISOString();
       strategy.questionnaire_used = !!questionnaire.primaryGoal;
+      strategy.grounding_sources = intelSources;
       
       // Ensure we have the correct number of posts
       if (strategy.content_calendar?.length < finalDuration) {
@@ -315,11 +370,12 @@ Be specific, creative, and actionable. Use the business context to personalize e
       if (requestId) {
         await supabase
           .from('campaign_strategy_requests')
-          .update({ 
+          .update({
             status: 'completed',
-            generated_strategy_id: strategyId 
+            generated_strategy_id: strategyId
           })
-          .eq('id', requestId);
+          .eq('id', requestId)
+          .eq('user_id', userId);
       }
       
       return new Response(
@@ -353,9 +409,18 @@ function buildComprehensiveContext(
   questionnaire: any,
   historicalPerformance: any[],
   nicheStrategy: any,
-  mlTimes: any[]
+  mlTimes: any[],
+  groundingSection: string = ''
 ): string {
   let context = `Generate a ${duration}-day content strategy with the following comprehensive context:\n\n`;
+
+  if (groundingSection) {
+    context += `═══════════════════════════════════════\n`;
+    context += `LIVE MARKET INTELLIGENCE\n`;
+    context += `═══════════════════════════════════════\n`;
+    context += groundingSection;
+    context += '\n';
+  }
   
   // === CAMPAIGN REQUIREMENTS ===
   context += `═══════════════════════════════════════\n`;

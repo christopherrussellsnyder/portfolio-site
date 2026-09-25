@@ -3,6 +3,7 @@ import Stripe from "https://esm.sh/stripe@18.5.0";
 import { serviceClient } from "../_shared/supabase.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { checkRateLimit, clientKey } from "../_shared/rate-limit.ts";
+import { isFounderEmail } from "../_shared/founder.ts";
 
 const PRODUCT_TO_TIER: Record<string, string> = {
   // Current live products
@@ -77,6 +78,20 @@ serve(async (req) => {
 
     const strategiesUsed = usageRes.data?.[0]?.lifetime_strategies_generated ?? 0;
     const localSub = subRes.data;
+
+    // Founder accounts bypass Stripe entirely — always report full access.
+    if (isFounderEmail(user.email)) {
+      return new Response(JSON.stringify({
+        subscribed: true,
+        tier: "founder",
+        subscription_end: null,
+        strategies_used: strategiesUsed,
+        source: "founder",
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200,
+      });
+    }
 
     // Fast path: return cached subscription if fresh and not forced.
     if (!force && localSub?.updated_at) {

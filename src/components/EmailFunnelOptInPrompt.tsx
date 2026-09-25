@@ -68,7 +68,7 @@ export function EmailFunnelOptInPrompt() {
       const { error } = await supabase.from("email_subscribers").insert({
         user_id: user.id,
         email: user.email,
-        full_name: (user.user_metadata as any)?.full_name ?? null,
+        full_name: user.user_metadata?.full_name ?? null,
         current_step: 0,
         next_send_at: new Date().toISOString(), // queue first email immediately
         status: "active",

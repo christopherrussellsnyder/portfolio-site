@@ -22,6 +22,8 @@ import {
 } from "../_shared/algorithms.ts";
 import { checkRateLimit, clientKey } from "../_shared/rate-limit.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { isFounderEmail } from "../_shared/founder.ts";
+import { callLovableGateway } from "../_shared/llm-gateway.ts";
 
 interface StrategyRequest {
   platform: string;
@@ -286,7 +288,11 @@ Make each post unique, strategic, and personalized for ${ctx.businessName}. Vary
 // Model routing. The long-form creative work stays on the stronger model; bounded
 // structured-JSON grading runs on the lite model (verified side-by-side to score
 // and flag identically on real prompts at a fraction of the cost).
-const MODEL_CREATIVE = 'google/gemini-3-flash-preview';
+// STRATEGY_MODEL_OVERRIDE lets the creative-tier model be swapped from the
+// Supabase dashboard (e.g. to try a stronger reasoning model for the overview/
+// batch generation steps) without a code change or redeploy. Unset falls back
+// to the known-working default below.
+const MODEL_CREATIVE = Deno.env.get('STRATEGY_MODEL_OVERRIDE') || 'google/gemini-3-flash-preview';
 const MODEL_STRUCTURED = 'google/gemini-2.5-flash-lite';
 
 async function callAI(
@@ -296,21 +302,14 @@ async function callAI(
   maxTokens: number = 16000,
   model: string = MODEL_CREATIVE,
 ): Promise<string> {
-  const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: prompt },
-      ],
-      temperature: 0.75,
-      max_tokens: maxTokens,
-    }),
+  const response = await callLovableGateway(apiKey, {
+    model,
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: prompt },
+    ],
+    temperature: 0.75,
+    max_tokens: maxTokens,
   });
 
   if (!response.ok) {
@@ -452,6 +451,7 @@ Mark "rewrite" for any post scoring under 75, and for every post named in the pr
       criticPrompt,
       'You are a ruthless but constructive CMO. Respond with valid JSON only.',
       8000,
+      MODEL_STRUCTURED,
     );
     const parsed = parseJSONSafe(raw);
     const rewrites = Array.isArray(parsed?.rewrites) ? parsed.rewrites : [];
@@ -796,8 +796,7 @@ serve(async (req) => {
       .eq('user_id', user.id)
       .maybeSingle();
     const isPaid = localSub?.status === 'active' && (localSub.plan_type === 'pro' || localSub.plan_type === 'agency');
-    const FOUNDER_EMAILS = new Set(['chrissnyder3456@gmail.com']);
-    const isFounder = !!user.email && FOUNDER_EMAILS.has(user.email.toLowerCase());
+    const isFounder = isFounderEmail(user.email);
     if (!isPaid && !isFounder) {
       const { data: usageRow } = await supabase
         .from('usage_tracking')
@@ -902,12 +901,36 @@ serve(async (req) => {
     // ========== INSIGHTS FEEDBACK LOOP ==========
     // Pull the user's actual historical performance and feed proven learnings back into prompts.
     const normalizedPlatform = normalizePlatformForIntel(platform);
-    const [topPostsRes, contentPatternsRes, optimalSlotsRes, baselineRes, topHashtagsRes] = await Promise.all([
+    const recentCampaignCutoff = new Date(Date.now() - 45 * 24 * 60 * 60 * 1000).toISOString();
+    const [topPostsRes, contentPatternsRes, optimalSlotsRes, baselineRes, topHashtagsRes, activeCampaignRes, calibrationRes] = await Promise.all([
       supabase.rpc('get_top_performing_posts', { p_user_id: user.id, p_platform: normalizedPlatform, p_limit: 5 }),
       supabase.from('content_performance_patterns').select('pattern_type,pattern_value,avg_engagement_rate,post_count').eq('user_id', user.id).order('performance_score', { ascending: false }).limit(20),
       supabase.rpc('get_optimal_time_slots', { p_user_id: user.id, p_platform: normalizedPlatform, p_limit: 5 }),
       supabase.rpc('get_user_baseline_metrics', { p_user_id: user.id, p_platform: normalizedPlatform }),
       supabase.rpc('get_top_performing_elements', { p_user_id: user.id, p_element_type: 'hashtags', p_limit: 8 }),
+      // Cross-channel: is there a paid campaign this organic strategy should reinforce
+      // rather than contradict or duplicate?
+      supabase
+        .from('campaign_ai_strategies')
+        .select('platform, niche, objective, strategy_data, weekly_themes, created_at')
+        .eq('user_id', user.id)
+        .eq('generation_status', 'completed')
+        .gte('created_at', recentCampaignCutoff)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      // Predicted-vs-actual calibration for this niche (same loop generate-ad-script
+      // already uses for creative_* pattern types) -- hook_technique/post_type are
+      // the strategy-relevant ones. is_calibrated gates on sample_size >= 10, so this
+      // is empty until enough scored outcomes exist for this niche.
+      supabase
+        .from('niche_calibration')
+        .select('pattern_type,pattern_value,error_pct,sample_size,avg_actual')
+        .eq('niche', niche)
+        .eq('is_calibrated', true)
+        .in('pattern_type', ['hook_technique', 'post_type'])
+        .order('sample_size', { ascending: false })
+        .limit(10),
     ]);
 
     const topPosts = topPostsRes.data || [];
@@ -915,6 +938,8 @@ serve(async (req) => {
     const slots = optimalSlotsRes.data || [];
     const baseline = (baselineRes.data && baselineRes.data[0]) || null;
     const topHashtags = topHashtagsRes.data || [];
+    const activeCampaign = activeCampaignRes.data || null;
+    const calibration = calibrationRes.data || [];
 
     let performanceFeedbackSection = '';
     if (topPosts.length > 0 || patterns.length > 0 || slots.length > 0 || baseline) {
@@ -972,6 +997,47 @@ serve(async (req) => {
       performanceFeedbackSection = lines.join('\n');
     } else {
       performanceFeedbackSection = '=== PROVEN PERFORMANCE LEARNINGS ===\nNo historical performance data for this user yet. Use general best practices for now; future strategies will incorporate their actual results as posts are published and analytics uploaded.';
+    }
+
+    // Calibrated niche performance: predicted-vs-actual aggregated across every
+    // advertiser in this niche (not just this user), same loop generate-ad-script
+    // already uses for creative_* pattern types. A secondary-confidence signal --
+    // weighted below this user's own first-party data above, but above generic
+    // best practices, so it stays a clearly separate block rather than folded
+    // into the "THIS USER'S ACTUAL PUBLISHED RESULTS" section above.
+    if (calibration.length > 0) {
+      const calLines = calibration.map((c: any) => {
+        const label = String(c.pattern_type).replace(/_/g, ' ');
+        const errorPct = Number(c.error_pct) || 0;
+        const drift = errorPct > 0
+          ? `historically UNDER-predicted by ~${Math.abs(errorPct).toFixed(0)}% (it beats expectations)`
+          : `historically OVER-predicted by ~${Math.abs(errorPct).toFixed(0)}% (it disappoints)`;
+        return `- ${label} = "${c.pattern_value}": measured ${Number(c.avg_actual || 0).toFixed(2)}% avg engagement across ${c.sample_size} scored outcomes in this niche; ${drift}.`;
+      });
+      const calibrationSection = `=== CALIBRATED NICHE PERFORMANCE (MEASURED PREDICTED-VS-ACTUAL ACROSS THIS NICHE — TREAT AS FACT, NOT OPINION) ===\n${calLines.join('\n')}\n\nThis is aggregated across advertisers in this niche, not just this user, so weight it below the first-party learnings above but above general best practices. Favor hook techniques and post types that beat expectations; be cautious with ones that consistently disappoint. If a post's prediction_basis leans on this, name it "niche calibration" specifically — never claim it as this user's own measured result.`;
+      performanceFeedbackSection = `${performanceFeedbackSection}\n\n${calibrationSection}`;
+    }
+
+    // Cross-channel: reinforce the active paid campaign instead of generating
+    // organic content in a vacuum that duplicates or contradicts it.
+    let campaignContextSection = '';
+    if (activeCampaign) {
+      const sd = (activeCampaign.strategy_data || {}) as any;
+      const overview = sd.overview || {};
+      const themeNames = (activeCampaign.weekly_themes || sd.weekly_themes || [])
+        .map((t: any) => t.name || t.objective)
+        .filter(Boolean)
+        .slice(0, 4);
+      const lines = [
+        `- Active paid campaign "${overview.campaign_name || 'Unnamed campaign'}" on ${activeCampaign.platform}, objective: ${activeCampaign.objective || overview.primary_objective || 'not specified'}.`,
+      ];
+      if (themeNames.length) {
+        lines.push(`- Its weekly themes: ${themeNames.join('; ')}.`);
+      }
+      campaignContextSection =
+        `=== ACTIVE PAID CAMPAIGN (this business's own current campaign — reinforce it, don't contradict or duplicate it) ===\n` +
+        lines.join('\n') +
+        `\nThe organic plan should complement this campaign's narrative where relevant (e.g. building trust/education around the same offer) rather than pursuing an unrelated angle in the same window.`;
     }
 
     // ========== STEP 0: External grounding (live, cached, fail-soft) ==========
@@ -1053,6 +1119,7 @@ serve(async (req) => {
     pushSignals(vocIntel?.section, vocIntel?.source || 'reddit', 'real_api');
     pushSignals(performanceFeedbackSection, 'performance_feedback_loop', 'first_party');
     pushSignals(seasonalitySection, 'seasonality:deterministic', 'real_api');
+    pushSignals(campaignContextSection, 'campaign_intelligence:active', 'first_party');
 
     const evidence = buildEvidenceLedger(rawSignals, evidenceQueryTerms);
     const evidenceSection = renderEvidenceLedger(evidence);
@@ -1067,7 +1134,7 @@ serve(async (req) => {
     const groundingTerms = extractGroundingTerms([
       siteIntel?.section, searchIntel?.section, adIntel?.section,
       vocIntel?.section, performanceFeedbackSection, promotionsSection,
-      ctx.products, ctx.uvp, ctx.businessName,
+      campaignContextSection, ctx.products, ctx.uvp, ctx.businessName,
     ]);
 
     const groundingSection = [
@@ -1076,6 +1143,7 @@ serve(async (req) => {
       searchIntel?.section,
       adIntel?.section,
       vocIntel?.section,
+      campaignContextSection,
       seasonalitySection,
       budgetSection,
       DIVERSITY_PROMPT,
@@ -1106,6 +1174,33 @@ serve(async (req) => {
       .map((r) => r!.source);
     console.log('Grounding sources active:', groundingSources.join(', ') || 'none (profile only)');
     console.log(`Grounding size: full ${groundingSection.length} chars → digest ${groundingDigest.length} chars`);
+
+    // Bounded, persistable summary of the evidence ledger — same object saved
+    // to content_strategies.evidence_summary and returned in the response, so
+    // "why did it recommend this?" is answerable from the saved strategy later,
+    // not only visible in server logs during the run.
+    const evidenceSummary = {
+      confidence: evidence.confidence,
+      confidence_label: evidence.confidenceLabel,
+      confidence_basis: evidence.confidenceBasis,
+      signals: evidence.signals.length,
+      duplicates_collapsed: evidence.duplicatesCollapsed,
+      contradictions: evidence.contradictions.length,
+      composition: evidence.composition,
+      sources: groundingSources,
+      contradictions_detail: evidence.contradictions.slice(0, 6).map((c) => ({
+        subject: c.subject,
+        kind: c.kind,
+        resolution: c.resolution,
+      })),
+      top_signals: evidence.signals.slice(0, 12).map((s) => ({
+        text: s.text.slice(0, 220),
+        source: s.source,
+        source_type: s.sourceType,
+        weight: Math.round(s.weight * 100) / 100,
+        corroboration: s.corroboration,
+      })),
+    };
 
     // Measured predicted-vs-actual calibration for this niche. Fetched BEFORE
     // generation so real outcomes steer candidate selection and the batch
@@ -1360,6 +1455,7 @@ serve(async (req) => {
         predicted_impressions: predictedMetrics.total_impressions,
         predicted_website_clicks: predictedMetrics.expected_website_clicks,
         predicted_conversions: predictedMetrics.expected_conversions,
+        evidence_summary: evidenceSummary,
         version: 1,
       })
       .select()
@@ -1450,7 +1546,7 @@ serve(async (req) => {
       JSON.stringify({
         success: true,
         strategyId: savedStrategy.id,
-        strategy: { ...overview, id: savedStrategy.id },
+        strategy: { ...overview, id: savedStrategy.id, evidence_summary: evidenceSummary },
         weeklyBreakdown: weeklyBreakdown,
         postsCount: allPosts.length,
         // Diagnostics: every field below is computed from real gathered evidence
@@ -1461,16 +1557,7 @@ serve(async (req) => {
           flagged_posts: finalScore.flaggedPosts.length,
           overview_selection: overviewSelection || null,
         },
-        evidence: {
-          confidence: evidence.confidence,
-          confidence_label: evidence.confidenceLabel,
-          confidence_basis: evidence.confidenceBasis,
-          signals: evidence.signals.length,
-          duplicates_collapsed: evidence.duplicatesCollapsed,
-          contradictions: evidence.contradictions.length,
-          composition: evidence.composition,
-          sources: groundingSources,
-        },
+        evidence: evidenceSummary,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

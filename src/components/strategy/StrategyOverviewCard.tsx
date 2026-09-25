@@ -3,7 +3,7 @@ import {
   Calendar, Target, TrendingUp, Users, Eye, Heart, MousePointer,
   Download, FileText, Table, Edit, RefreshCw, ExternalLink, ShoppingCart,
   Instagram, Linkedin, Twitter, Facebook, Video, ChevronDown, ChevronUp,
-  Lightbulb, AlertTriangle, CheckCircle, Zap, Clock
+  Lightbulb, AlertTriangle, CheckCircle, Zap, Clock, ShieldCheck
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -48,6 +48,7 @@ export function StrategyOverviewCard({
   const [showTactics, setShowTactics] = useState(false);
   const [showMilestones, setShowMilestones] = useState(false);
   const [showRisks, setShowRisks] = useState(false);
+  const [showEvidence, setShowEvidence] = useState(false);
 
   const contentMix = strategy.content_mix || {};
   const postTypeDistribution = strategy.post_type_distribution || {};
@@ -64,6 +65,7 @@ export function StrategyOverviewCard({
   const keyTactics = strategy.key_tactics || [];
   const successMilestones = strategy.success_milestones || {};
   const riskAssessment = strategy.risk_assessment || {};
+  const evidence = strategy.evidence_summary;
   
   const formatDate = (dateStr: string) => {
     try {
@@ -311,6 +313,85 @@ export function StrategyOverviewCard({
                       {riskAssessment.mitigation_strategies.map((strategy, i) => (
                         <li key={i} className="flex items-start gap-1">
                           <span>•</span> {strategy}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
+        )}
+
+        {/* Evidence - Collapsible: why the AI recommended this, not just what it recommended */}
+        {evidence && evidence.signals > 0 && (
+          <Collapsible open={showEvidence} onOpenChange={setShowEvidence}>
+            <CollapsibleTrigger asChild>
+              <Button variant="ghost" className="w-full justify-between p-0 h-auto">
+                <span className="text-sm font-semibold flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-muted-foreground" /> Evidence
+                  <Badge
+                    variant={
+                      evidence.confidence_label === 'High'
+                        ? 'default'
+                        : evidence.confidence_label === 'Medium'
+                        ? 'secondary'
+                        : 'destructive'
+                    }
+                    className="text-xs"
+                  >
+                    {evidence.confidence_label} confidence ({evidence.confidence}/100)
+                  </Badge>
+                </span>
+                {showEvidence ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="pt-2">
+              <div className="space-y-3">
+                <p className="text-xs text-muted-foreground">{evidence.confidence_basis}</p>
+
+                <div className="flex flex-wrap gap-2">
+                  <Badge variant="outline" className="text-xs">
+                    {evidence.composition.first_party} measured (this business)
+                  </Badge>
+                  <Badge variant="outline" className="text-xs">
+                    {evidence.composition.real_api} measured (live API)
+                  </Badge>
+                  <Badge variant="outline" className="text-xs">
+                    {evidence.composition.ai_estimated} AI-estimated
+                  </Badge>
+                  {evidence.duplicates_collapsed > 0 && (
+                    <Badge variant="outline" className="text-xs">
+                      {evidence.duplicates_collapsed} duplicate signal{evidence.duplicates_collapsed === 1 ? '' : 's'} collapsed
+                    </Badge>
+                  )}
+                </div>
+
+                {evidence.contradictions_detail.length > 0 && (
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground mb-1 flex items-center gap-1">
+                      <AlertTriangle className="w-3 h-3" /> Contradictions between sources:
+                    </p>
+                    <ul className="text-xs text-muted-foreground space-y-1.5">
+                      {evidence.contradictions_detail.map((c, i) => (
+                        <li key={i}>
+                          <span className="font-medium text-foreground">{c.subject}:</span> {c.resolution}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {evidence.top_signals.length > 0 && (
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground mb-1">Top-ranked signals used:</p>
+                    <ul className="text-xs text-muted-foreground space-y-1.5">
+                      {evidence.top_signals.slice(0, 6).map((s, i) => (
+                        <li key={i} className="flex items-start gap-1">
+                          <Badge variant="outline" className="text-[10px] shrink-0 mt-0.5">
+                            {s.source_type === 'first_party' ? 'measured' : s.source_type === 'real_api' ? 'live' : 'AI est.'}
+                          </Badge>
+                          <span>{s.text}</span>
                         </li>
                       ))}
                     </ul>

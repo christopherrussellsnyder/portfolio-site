@@ -1,4 +1,4 @@
-project_id = "yxpzkcqeqzpgysvrrezc"
+project_id = "vfwwhhkrquhbohlzazwo"
 
 [functions]
   [functions.ab-test-optimization]
@@ -23,20 +23,12 @@ project_id = "yxpzkcqeqzpgysvrrezc"
     verify_jwt = false
   [functions.auto-optimize-timing]
     verify_jwt = true
-  [functions.campaign-intelligence]
-    verify_jwt = true
-  [functions.competitor-analysis]
-    verify_jwt = true
-  [functions.content-success-predictor]
+  [functions.competitor-monitoring]
     verify_jwt = true
   [functions.dynamic-optimization]
     verify_jwt = true
 
   [functions.generate-comprehensive-campaign-strategy]
-    verify_jwt = true
-  [functions.generate-content]
-    verify_jwt = true
-  [functions.generate-content-enhanced]
     verify_jwt = true
   [functions.generate-strategy]
     verify_jwt = false
@@ -47,8 +39,6 @@ project_id = "yxpzkcqeqzpgysvrrezc"
   [functions.scheduler-intelligence]
     verify_jwt = true
   [functions.scrape-website]
-    verify_jwt = false
-  [functions.send-team-invitation]
     verify_jwt = false
   [functions.process-email-queue]
     verify_jwt = true

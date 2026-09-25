@@ -154,6 +154,41 @@ SEARCH-DEMAND RULES:
  * block server-side requests we return whatever succeeded and let the model
  * know the recon was partial rather than inventing competitor data.
  */
+/**
+ * Scrapes the Meta Ad Library for one search term (a competitor name, a
+ * page name, or a niche keyword) and returns raw ad-copy snippets. Extracted
+ * from fetchCompetitorAds so competitor-monitoring can scrape a single
+ * tracked competitor by name on its own schedule, using the exact same
+ * proven technique rather than a second, divergent implementation.
+ */
+export async function scrapeAdLibraryTerm(term: string, countryCode: string): Promise<string[]> {
+  const out: string[] = [];
+  const url =
+    `https://www.facebook.com/ads/library/async/search_ads/?q=${encodeURIComponent(term)}` +
+    `&count=20&active_status=active&ad_type=all&country=${countryCode}&media_type=all`;
+  const res = await timedFetch(url, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (compatible; KorexIntelligence/1.0)',
+      Accept: 'text/html,application/json',
+    },
+  });
+  if (!res || !res.ok) return out;
+  const body = await res.text().catch(() => '');
+  // The async endpoint returns a `for (;;);`-prefixed JSON payload.
+  const cleaned = body.replace(/^for\s*\(;;\);/, '');
+  const bodies = [...cleaned.matchAll(/"body"\s*:\s*\{\s*"markup"[\s\S]{0,400}?"__html"\s*:\s*"([^"]{40,400})"/g)]
+    .map((m) => stripHtml(m[1].replace(/\\u003C/g, '<').replace(/\\n/g, ' ')))
+    .filter(Boolean);
+  const titles = [...cleaned.matchAll(/"title"\s*:\s*"([^"]{15,180})"/g)].map((m) => m[1]);
+  out.push(...bodies.slice(0, 6).map((b) => `[${term}] ${b.slice(0, 220)}`));
+  out.push(...titles.slice(0, 6).map((t) => `[${term}] ${t}`));
+  return out;
+}
+
+export function countryCodeFor(geo: string): string {
+  return /uk|united kingdom/i.test(geo) ? 'GB' : /canada/i.test(geo) ? 'CA' : /australia/i.test(geo) ? 'AU' : 'US';
+}
+
 export async function fetchCompetitorAds(
   supabase: any,
   niche: string,
@@ -161,7 +196,7 @@ export async function fetchCompetitorAds(
   platform: string,
   country: string,
 ): Promise<IntelResult> {
-  const cc = /uk|united kingdom/i.test(country) ? 'GB' : /canada/i.test(country) ? 'CA' : /australia/i.test(country) ? 'AU' : 'US';
+  const cc = countryCodeFor(country);
   const terms = [
     ...competitors.split(',').map((c) => c.trim()).filter(Boolean).slice(0, 3),
     niche,
@@ -173,31 +208,7 @@ export async function fetchCompetitorAds(
   if (!snippets) {
     // Independent per-term lookups — run them concurrently so the worst case is one
     // timeout window rather than the sum of three.
-    const perTerm = await Promise.all(
-      terms.slice(0, 3).map(async (term) => {
-        const out: string[] = [];
-        const url =
-          `https://www.facebook.com/ads/library/async/search_ads/?q=${encodeURIComponent(term)}` +
-          `&count=20&active_status=active&ad_type=all&country=${cc}&media_type=all`;
-        const res = await timedFetch(url, {
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (compatible; KorexIntelligence/1.0)',
-            Accept: 'text/html,application/json',
-          },
-        });
-        if (!res || !res.ok) return out;
-        const body = await res.text().catch(() => '');
-        // The async endpoint returns a `for (;;);`-prefixed JSON payload.
-        const cleaned = body.replace(/^for\s*\(;;\);/, '');
-        const bodies = [...cleaned.matchAll(/"body"\s*:\s*\{\s*"markup"[\s\S]{0,400}?"__html"\s*:\s*"([^"]{40,400})"/g)]
-          .map((m) => stripHtml(m[1].replace(/\\u003C/g, '<').replace(/\\n/g, ' ')))
-          .filter(Boolean);
-        const titles = [...cleaned.matchAll(/"title"\s*:\s*"([^"]{15,180})"/g)].map((m) => m[1]);
-        out.push(...bodies.slice(0, 6).map((b) => `[${term}] ${b.slice(0, 220)}`));
-        out.push(...titles.slice(0, 6).map((t) => `[${term}] ${t}`));
-        return out;
-      }),
-    );
+    const perTerm = await Promise.all(terms.slice(0, 3).map((term) => scrapeAdLibraryTerm(term, cc)));
     snippets = Array.from(new Set(perTerm.flat())).slice(0, 24);
     // Ad creative in a niche turns over weekly — 3-day TTL keeps it fresh but cheap.
     if (snippets.length) await setCached(supabase, 'competitor_ads', cacheKey, snippets, 72);

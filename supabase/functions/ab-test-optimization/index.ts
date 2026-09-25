@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { serviceClient } from "../_shared/supabase.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { callLovableGateway } from "../_shared/llm-gateway.ts";
 
 serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
@@ -99,13 +100,7 @@ serve(async (req) => {
       const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
       
       if (LOVABLE_API_KEY) {
-        const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${LOVABLE_API_KEY}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
+        const aiResponse = await callLovableGateway(LOVABLE_API_KEY, {
             model: 'google/gemini-3-flash-preview',
             messages: [
               {
@@ -182,7 +177,6 @@ Format as JSON with keys: recommendedVariables, contentVariations, bestPractices
               }
             ],
             tool_choice: { type: 'function', function: { name: 'provide_recommendations' } }
-          }),
         });
 
         if (!aiResponse.ok) {
@@ -220,6 +214,58 @@ Format as JSON with keys: recommendedVariables, contentVariations, bestPractices
 
       return new Response(
         JSON.stringify({ success: true, prediction }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    if (action === 'suggest_optimizations') {
+      // Read-only recommendations for a human to act on -- never pauses or
+      // changes anything itself. Unlike auto_optimize below (which only fires
+      // for tests explicitly opted into auto_pause_enabled), this looks at
+      // every running test so the recommendation is actually visible to
+      // users, using the test's own configured thresholds when set and sane
+      // defaults otherwise.
+      const { data: runningTests } = await supabase
+        .from('ab_tests')
+        .select(`
+          id, name, platform,
+          ab_test_variants(*),
+          auto_ab_tests(*)
+        `)
+        .eq('user_id', user.id)
+        .eq('status', 'running');
+
+      const suggestions: any[] = [];
+
+      for (const test of runningTests || []) {
+        const autoConfig = test.auto_ab_tests?.[0];
+        const minImpressions = autoConfig?.min_impressions_before_pause || 100;
+        const threshold = autoConfig?.performance_threshold || 0.5;
+
+        const controlVariant = test.ab_test_variants.find((v: any) => v.is_control);
+        if (!controlVariant || !controlVariant.avg_engagement_rate) continue;
+
+        for (const variant of test.ab_test_variants) {
+          if (variant.is_control) continue;
+          if ((variant.total_impressions || 0) < minImpressions) continue;
+
+          const performanceRatio = (variant.avg_engagement_rate || 0) / controlVariant.avg_engagement_rate;
+          if (performanceRatio < threshold) {
+            suggestions.push({
+              testId: test.id,
+              testName: test.name,
+              platform: test.platform,
+              variantId: variant.id,
+              variantName: variant.variant_name,
+              impressions: variant.total_impressions,
+              reason: `${((1 - performanceRatio) * 100).toFixed(0)}% below the control variant after ${variant.total_impressions} impressions`,
+            });
+          }
+        }
+      }
+
+      return new Response(
+        JSON.stringify({ success: true, suggestions }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }

@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { TRIAL_STRATEGY_LIMIT } from '@/config/stripe.config';
 
-export type SubscriptionTier = 'pro' | 'agency' | null;
+export type SubscriptionTier = 'pro' | 'agency' | 'founder' | null;
 
 interface SubscriptionData {
   subscribed: boolean;
@@ -87,7 +87,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     : 'Starter';
 
   const canGenerateStrategy = state.subscribed || state.strategies_used < TRIAL_STRATEGY_LIMIT;
-  const isPro = state.subscribed && (state.tier === 'pro' || state.tier === 'agency');
+  const isPro = state.subscribed && (state.tier === 'pro' || state.tier === 'agency' || state.tier === 'founder');
 
   return (
     <SubscriptionContext.Provider

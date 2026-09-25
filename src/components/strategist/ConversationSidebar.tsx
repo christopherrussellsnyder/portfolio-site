@@ -109,7 +109,16 @@ export function ConversationSidebar({
                       'hover:bg-surface-tertiary hover:border-l-primary',
                       selectedId === conv.id && 'bg-surface-elevated border-l-primary'
                     )}
+                    role="button"
+                    tabIndex={0}
+                    aria-current={selectedId === conv.id}
                     onClick={() => onSelect(conv.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        onSelect(conv.id);
+                      }
+                    }}
                   >
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>

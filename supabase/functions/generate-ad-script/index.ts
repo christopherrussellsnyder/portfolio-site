@@ -4,6 +4,8 @@ import { checkRateLimit, clientKey } from "../_shared/rate-limit.ts";
 import { loadBrandKit, recentTreatments, normalizePlan } from "../_shared/ad-production.ts";
 import { buildAdCtx, gatherAdIntel, normalizeAdPlatform } from "../_shared/ad-intel.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { callLovableGateway } from "../_shared/llm-gateway.ts";
+import { scoreCaption } from "../_shared/algorithms.ts";
 
 const MODEL = "google/gemini-2.5-flash";
 
@@ -141,6 +143,18 @@ ${JSON.stringify(post, null, 2)}`;
     // ---- Brand kit + anti-repetition ------------------------------------
     const brandKit = await loadBrandKit(supabase, userId, workspaceId);
     const priorTreatments = await recentTreatments(supabase, userId);
+
+    // Voice fingerprint: a durable reference built from this business's own
+    // actually-published, measured-performance posts (same source used by
+    // generate-caption-variants), so the post-generation voice-match score
+    // below checks against real established voice, not an abstract ideal.
+    // Fails open to '' if the RPC errors or there's no history yet. Fired
+    // now so it resolves concurrently with the intel gathering below.
+    const voiceCorpusPromise: Promise<string> = supabase
+      .rpc("get_top_performing_posts", { p_user_id: userId, p_platform: platform || "all", p_limit: 8 })
+      .then(({ data }: { data: { content: string }[] | null }) =>
+        (data ?? []).map((p) => p.content).filter(Boolean).join(" "))
+      .catch(() => "");
 
     const brandBlock = `
 BRAND KIT (design inspiration lifted from the advertiser's own website — every generated visual must look like it belongs to this brand):
@@ -320,20 +334,13 @@ Write the ${variantCount} script variants, each with its production plan, now.`;
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
-    const aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: MODEL,
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-        response_format: { type: "json_object" },
-      }),
+    const aiRes = await callLovableGateway(LOVABLE_API_KEY, {
+      model: MODEL,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+      response_format: { type: "json_object" },
     });
 
     if (!aiRes.ok) {
@@ -368,6 +375,14 @@ Write the ${variantCount} script variants, each with its production plan, now.`;
       return json({ error: "The script engine returned nothing usable. Please try again." }, 502);
     }
 
+    // Voice fingerprint: score each script's consistency with this business's
+    // own established voice (same scorer generate-caption-variants uses),
+    // purely additive metadata for the UI -- never used to drop a variant,
+    // since (unlike caption variants) every produced ad here is meant to
+    // reach the user for a choice, not be pre-selected down to a pair.
+    const voiceCorpus = await voiceCorpusPromise;
+    const voiceReference = voiceCorpus || undefined;
+
     // Sanitise the art direction: caps generated plates, drops malformed scenes,
     // and falls back to a clean read when the model gives us nothing usable.
     // The evidence block is attached server-side so the UI can label each
@@ -393,7 +408,20 @@ Write the ${variantCount} script variants, each with its production plan, now.`;
       }
 
       plan.evidence = intelEvidence;
-      return { ...variant, production_plan: plan };
+
+      const score = scoreCaption(script, {
+        hook: String(variant.hook ?? ""),
+        voiceReference,
+        platform: adPlatform,
+      });
+      const voice_match = {
+        score: score.total,
+        voice_match: score.voiceMatch,
+        has_reference: Boolean(voiceReference),
+        notes: score.notes,
+      };
+
+      return { ...variant, production_plan: plan, voice_match };
     });
 
     return json({

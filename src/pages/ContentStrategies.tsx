@@ -32,6 +32,8 @@ import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { useStrategyGeneration, StrategyPost, StrategyOverview } from '@/hooks/useStrategyGeneration';
 import { StrategyOverviewCard } from '@/components/strategy/StrategyOverviewCard';
 import { CampaignStructureCard } from '@/components/strategy/CampaignStructureCard';
+import { SchedulerIntelligenceCard } from '@/components/strategy/SchedulerIntelligenceCard';
+import { AutoScheduleCard } from '@/components/strategy/AutoScheduleCard';
 import { StrategyPostCard } from '@/components/strategy/StrategyPostCard';
 import { OutcomeTrackingPanel } from '@/components/strategy/OutcomeTrackingPanel';
 import { StrategyCalendarView } from '@/components/strategy/StrategyCalendarView';
@@ -95,7 +97,9 @@ export default function ContentStrategies() {
     const data = await fetchStrategy(id);
     if (data) {
       setSelectedStrategy({
-        strategy: data.strategy as any,
+        // created_at is optional on StrategyOverview but always present on a
+        // fetched row.
+        strategy: data.strategy as StrategyOverview & { id: string; created_at: string },
         posts: data.posts,
       });
     }
@@ -184,9 +188,11 @@ export default function ContentStrategies() {
                     onExportCSV={() => exportStrategyToCSV(selectedStrategy.strategy, selectedStrategy.posts)}
                   />
                   <CampaignStructureCard
-                    data={(selectedStrategy.strategy as any).recommended_campaign_structure}
+                    data={selectedStrategy.strategy.recommended_campaign_structure}
                     platform={selectedStrategy.strategy.platform}
                   />
+                  <SchedulerIntelligenceCard platform={selectedStrategy.strategy.platform} />
+                  <AutoScheduleCard platform={selectedStrategy.strategy.platform} />
                 </div>
               </div>
 
@@ -194,7 +200,7 @@ export default function ContentStrategies() {
               <div className="lg:col-span-2 space-y-4">
                 <OutcomeTrackingPanel strategyId={selectedStrategy.strategy.id} />
                 {selectedStrategy.posts.map(post => (
-                  <StrategyPostCard key={post.id} post={post} />
+                  <StrategyPostCard key={post.id} post={post} platform={selectedStrategy.strategy.platform} />
                 ))}
               </div>
             </div>

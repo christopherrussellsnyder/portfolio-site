@@ -2,6 +2,7 @@
 // Returns null when authorized, or a Response (402/401) that the caller should return.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { getCorsHeaders } from "./cors.ts";
+import { isFounderEmail } from "./founder.ts";
 
 export async function requirePro(req: Request): Promise<{ userId: string } | Response> {
   const corsHeaders = getCorsHeaders(req);
@@ -31,8 +32,7 @@ export async function requirePro(req: Request): Promise<{ userId: string } | Res
   const user = userData.user;
 
   // Founder accounts always have full access.
-  const FOUNDER_EMAILS = new Set(["chrissnyder3456@gmail.com"]);
-  if (user.email && FOUNDER_EMAILS.has(user.email.toLowerCase())) {
+  if (isFounderEmail(user.email)) {
     return { userId: user.id };
   }
 
