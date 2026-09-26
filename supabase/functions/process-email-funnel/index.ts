@@ -1,5 +1,6 @@
 import { createClient } from 'npm:@supabase/supabase-js@2'
 import { getCorsHeaders } from '../_shared/cors.ts'
+import { assertCronOrAdmin } from '../_shared/cron-auth.ts'
 
 // Funnel cadence: Day 0, Day 2, Day 4, Day 7, Day 10
 const STEP_DELAYS_HOURS = [0, 48, 96, 168, 240]
@@ -19,6 +20,13 @@ Deno.serve(async (req) => {
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
   const supabase = createClient(supabaseUrl, serviceKey)
+
+  // This advances every opted-in subscriber's drip campaign in one batch --
+  // it's meant to run on a schedule (see the pg_cron job), not be callable
+  // by anyone holding the public anon key. Same gate as the other cron-only
+  // functions (refresh-campaign-intelligence, ml-model-training).
+  const authError = await assertCronOrAdmin(supabase, req, serviceKey, corsHeaders)
+  if (authError) return authError
 
   try {
     // Find subscribers due for their next email
