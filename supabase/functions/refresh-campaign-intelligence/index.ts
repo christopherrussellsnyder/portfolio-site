@@ -2,9 +2,7 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { serviceClient } from "../_shared/supabase.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { callLovableGateway } from "../_shared/llm-gateway.ts";
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type SupabaseServiceClient = any;
+import { assertCronOrAdmin } from "../_shared/cron-auth.ts";
 
 // This function fans out into up to 56 LLM calls per invocation (4 platforms
 // x 14 niches). It previously had no auth check at all, so anyone holding
@@ -13,30 +11,6 @@ type SupabaseServiceClient = any;
 // It's meant to run on a schedule (see the pg_cron job that invokes it),
 // so restrict it to that cron job or an admin/owner triggering a manual
 // refresh, same gate as calculate-prediction-accuracy.
-async function assertCronOrAdmin(
-  supabase: SupabaseServiceClient,
-  req: Request,
-  serviceKey: string,
-  corsHeaders: Record<string, string>,
-): Promise<Response | null> {
-  const authHeader = req.headers.get("Authorization") ?? "";
-  const isCron = req.headers.get("Lovable-Context") === "cron" || authHeader === `Bearer ${serviceKey}`;
-  if (isCron) return null;
-
-  const { data: userData } = await supabase.auth.getUser(authHeader.replace("Bearer ", ""));
-  const uid = userData?.user?.id;
-  let isAdmin = false;
-  if (uid) {
-    const { data: roles } = await supabase.from("user_roles").select("role").eq("user_id", uid);
-    isAdmin = (roles ?? []).some((r: { role: string }) => r.role === "admin" || r.role === "owner");
-  }
-  if (isAdmin) return null;
-
-  return new Response(JSON.stringify({ error: "Forbidden" }), {
-    status: 403,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
-}
 
 const PLATFORMS = ["meta", "tiktok", "google", "linkedin"];
 const PRIORITY_NICHES = [

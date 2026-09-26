@@ -583,7 +583,7 @@ function parseJSONSafe(text: string): any {
 
 // ============ DETERMINISTIC FALLBACK GENERATOR ============
 // Runs when AI generation fails so users NEVER get an empty strategy.
-// Ported from generate-comprehensive-campaign-strategy for reliability.
+// Runs deterministically so a fallback strategy is always available.
 function buildFallbackOverview(ctx: BusinessCtx, platform: string, durationDays: number, goals: string[]): any {
   const startDate = new Date();
   const endDate = new Date(startDate);

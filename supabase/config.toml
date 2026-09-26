@@ -28,8 +28,6 @@ project_id = "vfwwhhkrquhbohlzazwo"
   [functions.dynamic-optimization]
     verify_jwt = true
 
-  [functions.generate-comprehensive-campaign-strategy]
-    verify_jwt = true
   [functions.generate-strategy]
     verify_jwt = false
   [functions.ml-model-training]
