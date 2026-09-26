@@ -158,7 +158,7 @@ export default function Analytics() {
   }, [dateFrom, dateTo, platform]);
 
   const timeline = useMemo(
-    () => [...(data?.chartData.timeline || [])].sort((a, b) => a.date.localeCompare(b.date)),
+    () => [...(data?.chartData?.timeline || [])].sort((a, b) => a.date.localeCompare(b.date)),
     [data],
   );
 
@@ -234,7 +234,7 @@ export default function Analytics() {
                 </div>
               </CardContent>
             </Card>
-          ) : !data || data.overview.totalPosts === 0 ? (
+          ) : !data?.overview || data.overview.totalPosts === 0 ? (
             <Card className="bg-card border-border">
               <CardContent className="p-10 text-center text-sm text-muted-foreground">
                 <BarChart3 className="w-8 h-8 mx-auto mb-3 opacity-50" />

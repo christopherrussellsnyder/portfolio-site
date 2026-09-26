@@ -83,7 +83,7 @@ export function ContentPatternsPanel() {
   // Fails soft — supplementary context, not the page's core feature.
   if (!data) return null;
 
-  const hasContent = data.insights.length > 0 || data.recommendations.length > 0;
+  const hasContent = (data.insights?.length ?? 0) > 0 || (data.recommendations?.length ?? 0) > 0;
 
   return (
     <Card className="bg-card border-border mb-6">
@@ -105,7 +105,7 @@ export function ContentPatternsPanel() {
           </div>
           <p className="text-xs text-muted-foreground">
             What actually works for you, mined from your own published posts
-            {data.summary.dataPoints > 0 && ` — ${data.summary.dataPoints} posts analyzed`}.
+            {(data.summary?.dataPoints ?? 0) > 0 && ` — ${data.summary.dataPoints} posts analyzed`}.
           </p>
         </CardHeader>
         <CollapsibleContent>
@@ -117,7 +117,7 @@ export function ContentPatternsPanel() {
               </p>
             ) : (
               <>
-                {data.insights.length > 0 && (
+                {(data.insights?.length ?? 0) > 0 && (
                   <div className="space-y-2">
                     {data.insights.slice(0, 4).map((insight, i) => (
                       <div key={i} className="flex gap-2 items-start p-3 rounded-md bg-muted/30 border border-border/60">
@@ -137,7 +137,7 @@ export function ContentPatternsPanel() {
                   </div>
                 )}
 
-                {data.recommendations.length > 0 && (
+                {(data.recommendations?.length ?? 0) > 0 && (
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1.5 flex items-center gap-1.5">
                       <Lightbulb className="w-3.5 h-3.5" />
