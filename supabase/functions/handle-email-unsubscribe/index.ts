@@ -78,12 +78,12 @@ Deno.serve(async (req) => {
   }
 
   if (tokenRecord.used_at) {
-    return jsonResponse({ valid: false, reason: 'already_unsubscribed' })
+    return jsonResponse({ valid: false, success: false, already_unsubscribed: true, email: tokenRecord.email })
   }
 
   // GET: Validate token (the app's unsubscribe page calls this on load)
   if (req.method === 'GET') {
-    return jsonResponse({ valid: true })
+    return jsonResponse({ valid: true, email: tokenRecord.email })
   }
 
   // POST: Process the unsubscribe
@@ -102,7 +102,7 @@ Deno.serve(async (req) => {
   }
 
   if (!updated) {
-    return jsonResponse({ success: false, reason: 'already_unsubscribed' })
+    return jsonResponse({ success: false, already_unsubscribed: true, email: tokenRecord.email })
   }
 
   // Add email to suppressed list (upsert to handle duplicates)
