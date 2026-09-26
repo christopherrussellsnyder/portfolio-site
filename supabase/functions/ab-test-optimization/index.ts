@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { serviceClient } from "../_shared/supabase.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { callLovableGateway } from "../_shared/llm-gateway.ts";
+import { checkRateLimit, clientKey } from "../_shared/rate-limit.ts";
 
 serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
@@ -25,6 +26,17 @@ serve(async (req) => {
     if (authError || !user) {
       return new Response(JSON.stringify({ error: 'Invalid token' }), {
         status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // get_recommendations calls the LLM. It's not free -- authenticated but
+    // otherwise ungated, same tier as generate-ad-script -- so cap the whole
+    // endpoint rather than trust every action branch to police itself.
+    const rl = await checkRateLimit(clientKey(req, 'ab-test-optimization'), { limit: 20, windowMs: 60_000 });
+    if (!rl.ok) {
+      return new Response(JSON.stringify({ error: 'Too many requests. Please slow down.' }), {
+        status: 429,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
