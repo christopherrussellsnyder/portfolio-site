@@ -4,6 +4,7 @@ import { getCorsHeaders } from "../_shared/cors.ts";
 import { callLovableGateway } from "../_shared/llm-gateway.ts";
 import { fetchSearchDemand, fetchCompetitorAds, fetchVoiceOfCustomer, type IntelResult } from "../_shared/strategy-intel.ts";
 import { requirePro } from "../_shared/require-pro.ts";
+import { z, parseJsonBody } from "../_shared/validation.ts";
 
 // This is the one LLM-calling function in the codebase still on a
 // non-Gemini provider (openai/gpt-5-mini), with no comment explaining why --
@@ -32,6 +33,29 @@ interface BusinessProfile {
   competitor_names: string[];
 }
 
+// Every field is optional -- the prompt below already falls back to "Not
+// specified"/"Global"/etc. for anything missing. This only turns a missing
+// or malformed businessProfile into a clean 400 instead of the TypeError
+// (undefined has no property 'industry') that used to surface as a raw 500.
+const RequestSchema = z.object({
+  businessProfile: z.object({
+    business_name: z.string().optional(),
+    industry: z.string().optional(),
+    niche: z.string().optional(),
+    target_age_min: z.number().optional(),
+    target_age_max: z.number().optional(),
+    target_genders: z.array(z.string()).optional(),
+    target_locations: z.array(z.string()).optional(),
+    target_interests: z.array(z.string()).optional(),
+    business_goals: z.array(z.string()).optional(),
+    average_order_value: z.number().optional(),
+    price_point: z.string().optional(),
+    products_services: z.string().optional(),
+    unique_selling_points: z.array(z.string()).optional(),
+    competitor_names: z.array(z.string()).optional(),
+  }).passthrough(),
+});
+
 serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
   if (req.method === 'OPTIONS') {
@@ -45,7 +69,9 @@ serve(async (req) => {
   if (gate instanceof Response) return gate;
 
   try {
-    const { businessProfile } = await req.json() as { businessProfile: BusinessProfile };
+    const parsed = await parseJsonBody(req, RequestSchema);
+    if (!parsed.ok) return parsed.response;
+    const { businessProfile } = parsed.data as { businessProfile: BusinessProfile };
 
     // Live market grounding: without this, interests/keywords/hashtags/job-titles
     // are pure model priors about ad-platform taxonomy — generic and stale. Ground

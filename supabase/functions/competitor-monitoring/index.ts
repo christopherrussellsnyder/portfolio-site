@@ -3,6 +3,24 @@ import { serviceClient } from "../_shared/supabase.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { requirePro } from "../_shared/require-pro.ts";
 import { scrapeAdLibraryTerm, countryCodeFor } from "../_shared/strategy-intel.ts";
+import { z, parseJsonBody, UUID, ShortText } from "../_shared/validation.ts";
+
+// Loose on purpose: action is checked against each branch below rather than
+// a fixed enum, so an unrecognized action still falls through to the
+// existing "Invalid action" response instead of a generic validation error.
+// competitorId/alertId are the fields worth tightening -- a malformed UUID
+// here previously reached a `.eq()` call and surfaced as a raw Postgres
+// "invalid input syntax for type uuid" 500 instead of a clean 400.
+const RequestSchema = z.object({
+  action: z.string(),
+  competitorData: z.object({
+    name: ShortText.optional(),
+    industry: ShortText.nullable().optional(),
+    website: ShortText.nullable().optional(),
+  }).optional(),
+  competitorId: UUID.optional(),
+  alertId: UUID.optional(),
+});
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Db = any;
@@ -68,8 +86,9 @@ serve(async (req) => {
 
   try {
     const admin = serviceClient();
-    const body = await req.json().catch(() => ({}));
-    const { action, competitorData, competitorId, alertId } = body ?? {};
+    const parsed = await parseJsonBody(req, RequestSchema);
+    if (!parsed.ok) return parsed.response;
+    const { action, competitorData, competitorId, alertId } = parsed.data;
 
     // Weekly batch sweep across every user's tracked competitors -- cron-only,
     // same shape as ml-model-training's train_all_users.
