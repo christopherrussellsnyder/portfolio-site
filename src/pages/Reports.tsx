@@ -10,11 +10,20 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Switch } from '@/components/ui/switch';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Copy, ExternalLink, FileText, Lock, Loader2, Plus, Trash2, ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
-
-const FOUNDER_EMAIL = 'chrissnyder3456@gmail.com';
 
 interface Report {
   id: string;
@@ -37,6 +46,8 @@ export default function ReportsPage() {
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [reportToDelete, setReportToDelete] = useState<Report | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const today = new Date().toISOString().split('T')[0];
   const monthAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
@@ -44,8 +55,7 @@ export default function ReportsPage() {
   const [start, setStart] = useState(monthAgo);
   const [end, setEnd] = useState(today);
 
-  const isFounder = user?.email?.toLowerCase() === FOUNDER_EMAIL;
-  const isAgency = isFounder || (subscribed && tier === 'agency');
+  const isAgency = tier === 'founder' || (subscribed && tier === 'agency');
 
   const load = async () => {
     if (!activeWorkspaceId) return;
@@ -90,9 +100,12 @@ export default function ReportsPage() {
     else { toast.success(r.is_public ? 'Link disabled' : 'Public link enabled'); load(); }
   };
 
-  const deleteReport = async (r: Report) => {
-    if (!confirm(`Delete "${r.title}"?`)) return;
-    const { error } = await supabase.from('client_reports').delete().eq('id', r.id);
+  const confirmDeleteReport = async () => {
+    if (!reportToDelete) return;
+    setDeleting(true);
+    const { error } = await supabase.from('client_reports').delete().eq('id', reportToDelete.id);
+    setDeleting(false);
+    setReportToDelete(null);
     if (error) toast.error(error.message);
     else { toast.success('Deleted'); load(); }
   };
@@ -134,7 +147,25 @@ export default function ReportsPage() {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-4">
         {loading ? (
-          <div className="text-center py-12 text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin mx-auto" /></div>
+          <div className="space-y-4" aria-busy="true" aria-label="Loading reports">
+            {[0, 1, 2].map((i) => (
+              <Card key={i} className="bg-card border-border">
+                <CardHeader className="pb-3">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="space-y-2">
+                      <Skeleton className="h-5 w-48" />
+                      <Skeleton className="h-4 w-64" />
+                    </div>
+                    <Skeleton className="h-6 w-16" />
+                  </div>
+                </CardHeader>
+                <CardContent className="flex flex-wrap gap-2">
+                  <Skeleton className="h-8 w-20" />
+                  <Skeleton className="h-8 w-24" />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
         ) : reports.length === 0 ? (
           <Card className="bg-card border-border">
             <CardContent className="p-12 text-center space-y-3">
@@ -168,7 +199,7 @@ export default function ReportsPage() {
                 <Button size="sm" variant="outline" onClick={() => copyLink(r.share_token)} disabled={!r.is_public}>
                   <Copy className="h-3 w-3 mr-2" /> Copy link
                 </Button>
-                <Button size="sm" variant="ghost" onClick={() => deleteReport(r)} className="text-destructive ml-auto">
+                <Button size="sm" variant="ghost" onClick={() => setReportToDelete(r)} className="text-destructive ml-auto">
                   <Trash2 className="h-3 w-3 mr-2" /> Delete
                 </Button>
               </CardContent>
@@ -207,6 +238,27 @@ export default function ReportsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={!!reportToDelete} onOpenChange={(open) => !open && setReportToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete report?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete "{reportToDelete?.title}". Anyone with the public link will lose access.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDeleteReport}
+              disabled={deleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleting ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Deleting…</> : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

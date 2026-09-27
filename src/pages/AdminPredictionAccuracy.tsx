@@ -58,7 +58,7 @@ export default function AdminPredictionAccuracy() {
     onError: (e: Error) => toast({ title: 'Run failed', description: e.message, variant: 'destructive' }),
   });
 
-  const trend = (trendQuery.data ?? []) as any[];
+  const trend = trendQuery.data ?? [];
   const latest = trend[trend.length - 1];
   const previous = trend[trend.length - 2];
   const improving = latest && previous ? Number(latest.avg_abs_error_pct) < Number(previous.avg_abs_error_pct) : null;
@@ -128,7 +128,7 @@ export default function AdminPredictionAccuracy() {
             {(calibrationQuery.data ?? []).length === 0 ? (
               <p className="text-sm text-muted-foreground">No calibration rows yet.</p>
             ) : (
-              (calibrationQuery.data as any[]).map((c) => (
+              (calibrationQuery.data ?? []).map((c) => (
                 <div key={c.id} className="flex items-center justify-between gap-3 rounded-lg border border-border/60 px-3 py-2">
                   <div className="min-w-0">
                     <p className="text-sm truncate">{c.niche} · {c.pattern_type}: <span className="font-medium">{c.pattern_value}</span></p>

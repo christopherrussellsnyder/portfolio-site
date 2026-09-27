@@ -2,8 +2,11 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { requirePro } from "../_shared/require-pro.ts";
 import { checkRateLimit, clientKey } from "../_shared/rate-limit.ts";
-import { scoreCaption, selectDiverseCaptions } from "../_shared/algorithms.ts";
+import { scoreCaption, selectDiverseCaptions, extractGroundingTerms } from "../_shared/algorithms.ts";
+import { fetchSearchDemand, fetchCompetitorAds, fetchVoiceOfCustomer, type IntelResult } from "../_shared/strategy-intel.ts";
+import { buildAdCtx } from "../_shared/ad-intel.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { callLovableGateway } from "../_shared/llm-gateway.ts";
 
 serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
@@ -37,6 +40,48 @@ serve(async (req) => {
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     if (!LOVABLE_API_KEY) throw new Error('LOVABLE_API_KEY is not configured');
+
+    const admin = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+      { auth: { persistSession: false } },
+    );
+
+    // Voice fingerprint: a durable reference built from this business's own
+    // actually-published, measured-performance posts, not just the single
+    // post being varied — so "voice match" checks against real established
+    // voice, not a one-sample proxy. Fails open to '' (falls back to the
+    // original caption alone) if the RPC errors or there's no history yet.
+    const voiceCorpusPromise = admin
+      .rpc('get_top_performing_posts', { p_user_id: gate.userId, p_platform: platform || 'all', p_limit: 8 })
+      .then(({ data }: { data: { content: string }[] | null }) =>
+        (data ?? []).map((p) => p.content).filter(Boolean).join(' '))
+      .catch(() => '');
+
+    // Live market grounding: the parent strategy/ad this caption came from was
+    // grounded in real search demand, competitor recon and customer language
+    // (strategy-intel.ts) — but regenerating variants here never re-pulled any
+    // of it, so a caption swap silently lost that grounding. Reuse the exact
+    // same sources, keyed off this business's own industry/products.
+    const [settingsRes, bizInfoRes, businessContextRes] = await Promise.all([
+      admin.from('user_business_settings').select('*').eq('user_id', gate.userId).maybeSingle(),
+      admin.from('business_information').select('*').eq('user_id', gate.userId).maybeSingle(),
+      admin.from('business_context').select('business_profile, website_url').eq('user_id', gate.userId).eq('is_active', true).maybeSingle(),
+    ]);
+    const adCtx = buildAdCtx(settingsRes.data, bizInfoRes.data, businessContextRes.data);
+
+    const [searchIntel, adIntel, vocIntel] = await Promise.all([
+      fetchSearchDemand(admin, adCtx.industry, adCtx.products, adCtx.geoFocus).catch(() => null),
+      fetchCompetitorAds(admin, adCtx.industry, adCtx.competitors, String(platform || 'all'), adCtx.geoFocus).catch(() => null),
+      fetchVoiceOfCustomer(admin, adCtx.industry, adCtx.products).catch(() => null),
+    ]);
+    const groundingParts = [searchIntel, adIntel, vocIntel].filter(
+      (s): s is IntelResult => !!s?.ok && !!s.section,
+    );
+    const intelSources = groundingParts.map((s) => s.source);
+    const groundingBlock = groundingParts.length
+      ? `\n\n${groundingParts.map((s) => s.section).join('\n\n')}\n\nGROUNDING RULES (mandatory):\n- Prefer the real search phrasing, customer language and unoccupied angles above over generic copywriting tropes.\n- Do not reuse the saturated angles shown in the competitor recon above — differentiate from them explicitly.\n- Never invent a number, quote or claim that isn't in the material above.`
+      : '';
 
     // Over-generate, then keep the best two by objective score AND angle
     // distance. One call, same cost bracket — a wider candidate pool costs only
@@ -73,23 +118,17 @@ JSON schema:
 """
 ${caption}
 """
+${groundingBlock}
 
 Generate ${CANDIDATE_POOL} distinct candidates now.`;
 
-    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt },
-        ],
-        response_format: { type: 'json_object' },
-      }),
+    const response = await callLovableGateway(LOVABLE_API_KEY, {
+      model: 'google/gemini-2.5-flash',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ],
+      response_format: { type: 'json_object' },
     });
 
     if (!response.ok) {
@@ -129,10 +168,18 @@ Generate ${CANDIDATE_POOL} distinct candidates now.`;
       .filter((v: any) => typeof v?.caption === 'string' && v.caption.trim().length > 20)
       .map((v: any) => ({ ...v, caption: String(v.caption).trim() }));
 
+    const voiceCorpus = await voiceCorpusPromise;
+    const voiceReference = [String(caption || ''), voiceCorpus].filter(Boolean).join(' ');
+    const groundingTerms = extractGroundingTerms([
+      searchIntel?.section, adIntel?.section, vocIntel?.section,
+      adCtx.products, adCtx.uvp, adCtx.businessName,
+    ]);
+
     const poolScores = pool.map((v: any) =>
       scoreCaption(v.caption, {
         platform: String(platform || ''),
-        voiceReference: String(caption || ''),
+        voiceReference,
+        groundingTerms,
         hook: String(v.hook || ''),
       }),
     );
@@ -169,12 +216,6 @@ Generate ${CANDIDATE_POOL} distinct candidates now.`;
     let registered: { label: string; variant_id: string }[] = [];
     if (variants.length) {
       try {
-        const admin = createClient(
-          Deno.env.get('SUPABASE_URL') ?? '',
-          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-          { auth: { persistSession: false } },
-        );
-
         const { data: test, error: testErr } = await admin
           .from('ab_tests')
           .insert({
@@ -217,7 +258,7 @@ Generate ${CANDIDATE_POOL} distinct candidates now.`;
     }
 
     return new Response(
-      JSON.stringify({ variants, ab_test_id: abTestId, registered_variants: registered }),
+      JSON.stringify({ variants, ab_test_id: abTestId, registered_variants: registered, intel_sources: intelSources }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 

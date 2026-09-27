@@ -206,6 +206,13 @@ export interface AdScriptVariant {
   estimated_seconds?: number;
   why_it_works?: string;
   production_plan?: ProductionPlan;
+  /** Server-computed voice-consistency score vs. this business's own top-performing posts. */
+  voice_match?: {
+    score: number;
+    voice_match: number;
+    has_reference: boolean;
+    notes: string[];
+  };
 }
 
 

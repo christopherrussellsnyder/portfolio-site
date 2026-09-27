@@ -16,10 +16,28 @@ serve(async (req) => {
   }
 
   try {
-    const { userId, platform, selectedTime } = await req.json();
-    
     const supabase = serviceClient();
-    
+
+    // Service-role client bypasses RLS; this previously trusted a
+    // client-supplied userId for every read/write, including deleting and
+    // rewriting another account's audience_activity_patterns. Derive
+    // userId from the verified token instead.
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return new Response(JSON.stringify({ error: 'Authentication required' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+    const { data: authData, error: authErr } = await supabase.auth.getUser(
+      authHeader.replace('Bearer ', ''),
+    );
+    if (authErr || !authData.user) {
+      return new Response(JSON.stringify({ error: 'Invalid session' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+    const userId = authData.user.id;
+
+    const { platform, selectedTime } = await req.json();
+
     console.log('Analyzing schedule for user:', userId);
     
     // Calculate audience activity patterns

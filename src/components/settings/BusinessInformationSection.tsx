@@ -10,6 +10,7 @@ import {
   Building2, Users, Palette, Image, BarChart3, ChevronDown, 
   Save, Loader2, Info, HelpCircle, CheckCircle2, Tag
 } from 'lucide-react';
+import { calculateBusinessInfoCompletion } from '@/lib/businessProfileCompletion';
 import { CompanyDetailsSection } from './business-info/CompanyDetailsSection';
 import { TargetAudienceSection } from './business-info/TargetAudienceSection';
 import { BrandIdentitySection } from './business-info/BrandIdentitySection';
@@ -206,58 +207,12 @@ export const BusinessInformationSection: React.FC = () => {
     setOpenSections(prev => ({ ...prev, [section]: !prev[section] }));
   };
 
-  // Calculate completion percentage
-  const calculateCompletion = useCallback(() => {
-    const fields = [
-      // Company Details (13 fields)
-      businessInfo.business_name,
-      businessInfo.business_type,
-      businessInfo.industry,
-      businessInfo.company_size,
-      businessInfo.website,
-      businessInfo.location,
-      businessInfo.business_stage,
-      businessInfo.years_in_business,
-      businessInfo.monthly_revenue_range,
-      businessInfo.primary_products_services,
-      businessInfo.unique_value_proposition,
-      businessInfo.top_competitors.length > 0,
-      businessInfo.competitive_advantage,
-      // Target Audience (9 fields)
-      businessInfo.income_level,
-      businessInfo.education_levels.length > 0,
-      businessInfo.geographic_focus.length > 0,
-      businessInfo.customer_pain_points,
-      businessInfo.buying_behavior,
-      businessInfo.customer_lifetime_value,
-      // Brand Identity (9 fields)
-      businessInfo.brand_voice_traits.length > 0,
-      businessInfo.primary_brand_color,
-      businessInfo.secondary_brand_color,
-      businessInfo.content_themes.length > 0,
-      businessInfo.content_restrictions,
-      businessInfo.brand_values.length > 0,
-      // Marketing Assets (7 fields)
-      businessInfo.available_content_types.length > 0,
-      businessInfo.professional_photos_count > 0,
-      businessInfo.videos_available_count > 0,
-      businessInfo.testimonials_count > 0,
-      businessInfo.photography_style,
-      businessInfo.video_production_capability,
-      businessInfo.content_creation_frequency,
-      // Performance Metrics (7 fields)
-      businessInfo.monthly_website_visitors,
-      businessInfo.total_social_followers,
-      businessInfo.avg_post_engagement_rate,
-      businessInfo.current_conversion_rate,
-      businessInfo.customer_acquisition_cost,
-      businessInfo.email_subscriber_count,
-      businessInfo.best_performing_content_types.length > 0
-    ];
-
-    const filledFields = fields.filter(Boolean).length;
-    return Math.round((filledFields / fields.length) * 100);
-  }, [businessInfo]);
+  // Completion percentage -- shared with the onboarding checklist and the
+  // profile-completeness nudge so all three agree on the same number.
+  const calculateCompletion = useCallback(
+    () => calculateBusinessInfoCompletion(businessInfo),
+    [businessInfo],
+  );
 
   const getSectionCompletion = useCallback((section: string) => {
     switch (section) {

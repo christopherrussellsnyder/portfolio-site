@@ -5,6 +5,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -433,6 +434,11 @@ export default function ContentGeneration() {
                               {v.production_plan.scenes.length}-scene
                             </Badge>
                           )}
+                          {v.voice_match?.has_reference && (
+                            <Badge variant="outline" className="border-border text-[10px]">
+                              Voice match {Math.round(v.voice_match.voice_match * 100)}%
+                            </Badge>
+                          )}
                         </div>
                         {active && <Check className="w-3.5 h-3.5 text-primary" />}
                       </div>
@@ -463,9 +469,14 @@ export default function ContentGeneration() {
             <Card className="bg-background border-card">
               <CardContent className="p-4 space-y-4">
                 {loadingActors ? (
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground py-6 justify-center">
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Loading the actor library...
+                  <div
+                    className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-8 gap-2"
+                    aria-busy="true"
+                    aria-label="Loading actor library"
+                  >
+                    {Array.from({ length: 8 }).map((_, i) => (
+                      <Skeleton key={i} className="aspect-[3/4] rounded-md" />
+                    ))}
                   </div>
                 ) : actors.length === 0 ? (
                   <div className="text-sm text-muted-foreground py-6 text-center flex flex-col items-center gap-2">
@@ -624,9 +635,10 @@ export default function ContentGeneration() {
             </div>
 
             {loadingVideos ? (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground py-8 justify-center">
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Loading your library...
+              <div className="grid gap-3 grid-cols-2 md:grid-cols-4" aria-busy="true" aria-label="Loading video library">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <Skeleton key={i} className="aspect-video rounded-md" />
+                ))}
               </div>
             ) : videos.length === 0 ? (
               <Card className="bg-background border-card">

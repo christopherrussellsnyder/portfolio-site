@@ -1,33 +1,25 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { getCorsHeaders } from '../_shared/cors.ts';
+import { callLovableGateway } from '../_shared/llm-gateway.ts';
+import { requireAgency } from '../_shared/require-pro.ts';
 
 Deno.serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   try {
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
-      return new Response(JSON.stringify({ error: 'Missing authorization' }), {
-        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
+    // Reports.tsx only renders the generate button for Agency (or founder)
+    // accounts, per the "White-label reports" Agency perk on the pricing
+    // page -- but that's a frontend-only gate. Enforce it here too, since
+    // this does a real LLM call and was otherwise callable by any
+    // authenticated user with a valid JWT.
+    const gate = await requireAgency(req);
+    if (gate instanceof Response) return gate;
+    const userId = gate.userId;
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-
-    const userClient = createClient(supabaseUrl, anonKey, {
-      global: { headers: { Authorization: authHeader } },
-    });
     const admin = createClient(supabaseUrl, serviceKey);
-
-    const { data: { user }, error: userErr } = await userClient.auth.getUser();
-    if (userErr || !user) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
 
     const body = await req.json().catch(() => ({}));
     const { workspace_id, period_start, period_end, title, include_ai_narrative = true } = body ?? {};
@@ -43,7 +35,7 @@ Deno.serve(async (req) => {
       .from('workspace_members')
       .select('workspace_id')
       .eq('workspace_id', workspace_id)
-      .eq('user_id', user.id)
+      .eq('user_id', userId)
       .maybeSingle();
     if (!member) {
       return new Response(JSON.stringify({ error: 'Not a workspace member' }), {
@@ -58,7 +50,7 @@ Deno.serve(async (req) => {
     const { data: posts } = await admin
       .from('scheduled_posts')
       .select('id, content, platforms, published_at, impressions, engagements, clicks, status')
-      .eq('user_id', user.id)
+      .eq('user_id', userId)
       .eq('status', 'published')
       .gte('published_at', startISO)
       .lte('published_at', endISO);
@@ -91,7 +83,7 @@ Deno.serve(async (req) => {
     const { data: analytics } = await admin
       .from('uploaded_analytics')
       .select('platform, extracted_data, ai_insights, uploaded_at')
-      .eq('user_id', user.id)
+      .eq('user_id', userId)
       .gte('uploaded_at', startISO)
       .order('uploaded_at', { ascending: false })
       .limit(3);
@@ -99,7 +91,7 @@ Deno.serve(async (req) => {
     const { data: strategies } = await admin
       .from('content_strategies')
       .select('id, title, duration_days, platforms, created_at')
-      .eq('user_id', user.id)
+      .eq('user_id', userId)
       .gte('created_at', startISO)
       .order('created_at', { ascending: false })
       .limit(3);
@@ -141,17 +133,10 @@ Top posts: ${topPosts.map((p: any) => `"${p.content.slice(0, 80)}" (${p.engageme
 
 Structure the response as JSON: { "executive_summary": "...", "what_worked": "...", "opportunities": "...", "next_steps": "..." }. Keep each section 2-3 sentences, confident and client-facing. No emojis.`;
 
-          const resp = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Lovable-API-Key': lovableKey,
-            },
-            body: JSON.stringify({
-              model: 'google/gemini-3-flash-preview',
-              messages: [{ role: 'user', content: prompt }],
-              response_format: { type: 'json_object' },
-            }),
+          const resp = await callLovableGateway(lovableKey, {
+            model: 'google/gemini-3-flash-preview',
+            messages: [{ role: 'user', content: prompt }],
+            response_format: { type: 'json_object' },
           });
           if (resp.ok) {
             const data = await resp.json();
@@ -172,7 +157,7 @@ Structure the response as JSON: { "executive_summary": "...", "what_worked": "..
       .from('client_reports')
       .insert({
         workspace_id,
-        created_by: user.id,
+        created_by: userId,
         title: reportTitle,
         period_start,
         period_end,

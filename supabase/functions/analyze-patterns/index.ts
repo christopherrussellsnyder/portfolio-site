@@ -9,10 +9,27 @@ serve(async (req) => {
   }
 
   try {
-    const { userId, platform } = await req.json();
-    
     const supabase = serviceClient();
-    
+
+    // Service-role client bypasses RLS; this previously trusted a
+    // client-supplied userId to read another account's content patterns.
+    // Derive userId from the verified token instead.
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return new Response(JSON.stringify({ error: 'Authentication required' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+    const { data: authData, error: authErr } = await supabase.auth.getUser(
+      authHeader.replace('Bearer ', ''),
+    );
+    if (authErr || !authData.user) {
+      return new Response(JSON.stringify({ error: 'Invalid session' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+    const userId = authData.user.id;
+
+    const { platform } = await req.json();
+
     console.log('Analyzing content patterns for user:', userId);
     
     // Run comprehensive pattern analysis

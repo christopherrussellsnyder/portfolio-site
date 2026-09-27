@@ -48,6 +48,14 @@ const empty = (): Promotion => ({
 const PROMO_TYPES = ['discount', 'sale', 'bogo', 'free_shipping', 'bundle', 'limited_time_offer', 'flash_sale', 'seasonal', 'launch', 'giveaway', 'other'];
 const PLATFORMS = ['Instagram', 'Facebook', 'TikTok', 'LinkedIn', 'Twitter/X', 'YouTube', 'Google Ads', 'Email'];
 
+// `platforms` is stored as jsonb; this app always writes it as string[]
+// (see draft.platforms above), so narrow just that field rather than the
+// whole row.
+const normalizePromo = (row: Omit<Promotion, 'platforms'> & { platforms: unknown }): Promotion => ({
+  ...row,
+  platforms: Array.isArray(row.platforms) ? (row.platforms as string[]) : [],
+});
+
 export const PromotionsSection: React.FC = () => {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -65,7 +73,7 @@ export const PromotionsSection: React.FC = () => {
         .eq('user_id', user.id)
         .order('start_date', { ascending: false });
       if (!error && data) {
-        setPromos(data.map((d: any) => ({ ...d, platforms: Array.isArray(d.platforms) ? d.platforms : [] })));
+        setPromos(data.map(normalizePromo));
       }
       setLoading(false);
     })();
@@ -92,7 +100,7 @@ export const PromotionsSection: React.FC = () => {
       toast({ title: 'Error', description: error.message, variant: 'destructive' });
       return;
     }
-    setPromos([{ ...(data as any), platforms: (data as any).platforms || [] }, ...promos]);
+    setPromos([normalizePromo(data), ...promos]);
     setDraft(empty());
     toast({ title: 'Promotion added', description: 'It will be factored into your next strategy generation.' });
   };

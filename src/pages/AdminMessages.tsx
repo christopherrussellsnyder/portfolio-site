@@ -51,11 +51,11 @@ export default function AdminMessages() {
   const sendMutation = useMutation({
     mutationFn: async () => {
       if (!selected || !reply.trim()) throw new Error('Empty reply');
-      const { data, error } = await supabase.functions.invoke('send-gmail-reply', {
+      const { data, error } = await supabase.functions.invoke<{ error?: string }>('send-gmail-reply', {
         body: { submissionId: selected.id, body: reply.trim(), subject: subjectOverride.trim() },
       });
-      if (error || (data as any)?.error) {
-        throw new Error((data as any)?.error || error?.message || 'Failed to send');
+      if (error || data?.error) {
+        throw new Error(data?.error || error?.message || 'Failed to send');
       }
       return data;
     },

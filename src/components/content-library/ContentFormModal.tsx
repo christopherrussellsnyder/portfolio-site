@@ -211,7 +211,7 @@ export default function ContentFormModal({ content, folders, onClose, onSave }: 
                   className="bg-secondary border-border"
                   onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddTag())}
                 />
-                <Button type="button" variant="outline" onClick={handleAddTag}>
+                <Button type="button" variant="outline" onClick={handleAddTag} aria-label="Add tag">
                   <Plus className="h-4 w-4" />
                 </Button>
               </div>
@@ -220,7 +220,7 @@ export default function ContentFormModal({ content, folders, onClose, onSave }: 
                   {formData.tags.map((tag, i) => (
                     <span key={i} className="text-sm px-3 py-1 rounded-full bg-primary/20 text-primary flex items-center gap-1">
                       {tag}
-                      <button type="button" onClick={() => handleRemoveTag(tag)} className="hover:text-destructive">
+                      <button type="button" onClick={() => handleRemoveTag(tag)} aria-label={`Remove tag ${tag}`} className="hover:text-destructive">
                         <X className="h-3 w-3" />
                       </button>
                     </span>
@@ -240,7 +240,7 @@ export default function ContentFormModal({ content, folders, onClose, onSave }: 
                   className="bg-secondary border-border"
                   onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddHashtag())}
                 />
-                <Button type="button" variant="outline" onClick={handleAddHashtag}>
+                <Button type="button" variant="outline" onClick={handleAddHashtag} aria-label="Add hashtag">
                   <Plus className="h-4 w-4" />
                 </Button>
               </div>
@@ -249,7 +249,7 @@ export default function ContentFormModal({ content, folders, onClose, onSave }: 
                   {formData.hashtags.map((tag, i) => (
                     <span key={i} className="text-sm px-3 py-1 rounded-full bg-secondary text-foreground flex items-center gap-1">
                       #{tag}
-                      <button type="button" onClick={() => handleRemoveHashtag(tag)} className="hover:text-destructive">
+                      <button type="button" onClick={() => handleRemoveHashtag(tag)} aria-label={`Remove hashtag ${tag}`} className="hover:text-destructive">
                         <X className="h-3 w-3" />
                       </button>
                     </span>

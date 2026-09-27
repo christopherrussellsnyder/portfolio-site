@@ -3,9 +3,7 @@
 // Returns a Response (401/402) when the caller may not render, otherwise the quota context.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { getCorsHeaders } from "./cors.ts";
-
-// Founder accounts bypass every tier and quota check.
-const FOUNDER_EMAILS = new Set(["chrissnyder3456@gmail.com"]);
+import { isFounderEmail } from "./founder.ts";
 
 export type VideoTier = "starter" | "pro" | "agency" | "founder";
 
@@ -67,7 +65,7 @@ export async function resolveVideoQuota(
   const email = (user.email ?? "").toLowerCase();
 
   let tier: VideoTier = "starter";
-  if (FOUNDER_EMAILS.has(email)) {
+  if (isFounderEmail(email)) {
     tier = "founder";
   } else {
     const { data: sub } = await supabase

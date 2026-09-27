@@ -24,11 +24,11 @@ export default function PublicReport() {
         .maybeSingle();
       if (rErr || !r) { setError('Report not found or no longer available.'); setLoading(false); return; }
       setReport(r);
-      setWorkspaceName((r as any).workspaces?.name ?? '');
+      setWorkspaceName(r.workspaces?.name ?? '');
       const { data: bk } = await supabase
         .from('brand_kits')
         .select('*')
-        .eq('workspace_id', (r as any).workspace_id)
+        .eq('workspace_id', r.workspace_id)
         .maybeSingle();
       setBrandKit(bk);
       // Fire-and-forget view increment

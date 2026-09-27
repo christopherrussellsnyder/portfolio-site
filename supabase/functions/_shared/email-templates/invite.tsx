@@ -23,7 +23,7 @@ interface InviteEmailProps {
   confirmationUrl: string
 }
 
-const LOGO_URL = 'https://yxpzkcqeqzpgysvrrezc.supabase.co/storage/v1/object/public/email-assets/korex-wordmark-lockup.png'
+const LOGO_URL = 'https://vfwwhhkrquhbohlzazwo.supabase.co/storage/v1/object/public/email-assets/korex-wordmark-lockup.png'
 
 export const InviteEmail = ({
   siteName,

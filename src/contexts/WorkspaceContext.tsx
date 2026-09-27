@@ -30,8 +30,6 @@ interface WorkspaceContextType {
   refresh: () => Promise<void>;
 }
 
-const FOUNDER_EMAIL = 'chrissnyder3456@gmail.com';
-
 const WorkspaceContext = createContext<WorkspaceContextType>({
   workspaces: [],
   activeWorkspace: null,
@@ -56,13 +54,11 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const isFounder = user?.email?.toLowerCase() === FOUNDER_EMAIL;
-
   const workspaceLimit = useMemo(() => {
-    if (isFounder) return 999;
+    if (tier === 'founder') return Number.POSITIVE_INFINITY;
     if (subscribed && tier === 'agency') return 10;
     return 1;
-  }, [isFounder, subscribed, tier]);
+  }, [subscribed, tier]);
 
   const load = useCallback(async () => {
     if (!user?.id) {
@@ -91,7 +87,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       setWorkspaces(list);
 
       // Determine active workspace
-      const savedId = (profile as any)?.active_workspace_id as string | null | undefined;
+      const savedId = profile?.active_workspace_id;
       const active = list.find((w) => w.id === savedId) || list.find((w) => w.is_default) || list[0];
       setActiveWorkspaceId(active?.id ?? null);
     } catch (err) {

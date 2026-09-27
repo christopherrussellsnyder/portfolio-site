@@ -894,9 +894,18 @@ const MediaLibrary: React.FC = () => {
                   } hover:border-border transition-all`}
                 >
                   {/* Thumbnail */}
-                  <div 
+                  <div
                     className="aspect-square relative cursor-pointer"
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`Open ${item.title || item.filename}`}
                     onClick={() => openMediaDetail(item)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        openMediaDetail(item);
+                      }
+                    }}
                   >
                     {item.file_type === 'image' || item.file_type === 'gif' ? (
                       <img
@@ -1586,7 +1595,16 @@ const MediaLibrary: React.FC = () => {
                     <div
                       key={img.id}
                       className="relative aspect-[4/3] rounded-lg overflow-hidden border border-border hover:border-primary transition-colors cursor-pointer group"
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`Import stock image: ${img.description}`}
                       onClick={() => handleImportStockImage(img)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          handleImportStockImage(img);
+                        }
+                      }}
                     >
                       <img
                         src={img.url}

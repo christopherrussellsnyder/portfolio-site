@@ -37,8 +37,14 @@ export default function Unsubscribe() {
   const confirm = async () => {
     setSubmitting(true);
     try {
-      const { error } = await supabase.functions.invoke("handle-email-unsubscribe", { body: { token } });
+      const { data, error } = await supabase.functions.invoke("handle-email-unsubscribe", { body: { token } });
       if (error) throw error;
+      if (data?.already_unsubscribed) {
+        setEmail(data?.email ?? email);
+        setState("already");
+        return;
+      }
+      if (!data?.success) throw new Error(data?.error || "Unsubscribe failed");
       // Also mark our funnel record (best-effort; user may not be signed in)
       try {
         const { data: auth } = await supabase.auth.getUser();

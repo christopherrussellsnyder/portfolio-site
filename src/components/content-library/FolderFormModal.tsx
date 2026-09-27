@@ -62,6 +62,8 @@ export default function FolderFormModal({ onClose, onSave }: FolderFormModalProp
                   key={i}
                   type="button"
                   onClick={() => setIcon(i)}
+                  aria-label={`Use icon ${i}`}
+                  aria-pressed={icon === i}
                   className={`w-10 h-10 rounded-lg text-xl flex items-center justify-center transition-all ${
                     icon === i ? 'bg-primary ring-2 ring-primary ring-offset-2 ring-offset-card' : 'bg-secondary hover:bg-secondary/80'
                   }`}
@@ -81,6 +83,8 @@ export default function FolderFormModal({ onClose, onSave }: FolderFormModalProp
                   key={c}
                   type="button"
                   onClick={() => setColor(c)}
+                  aria-label={`Use color ${c}`}
+                  aria-pressed={color === c}
                   className={`w-8 h-8 rounded-full transition-all ${
                     color === c ? 'ring-2 ring-white ring-offset-2 ring-offset-card' : ''
                   }`}

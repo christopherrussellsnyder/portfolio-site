@@ -1,6 +1,12 @@
 import { useQuery } from '@tanstack/react-query';
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { calculateBusinessInfoCompletion } from '@/lib/businessProfileCompletion';
+
+// A thin profile clears every downstream AI feature's "Not specified"
+// fallback; this is a low bar (roughly a third of the 39 scored fields),
+// not a demand for the full form.
+const PROFILE_COMPLETE_THRESHOLD = 35;
 
 export interface OnboardingStep {
   id: string;
@@ -63,7 +69,7 @@ export function useOnboardingProgress() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return null;
 
-      const [context, research, strategies, assets, videos] = await Promise.all([
+      const [context, research, strategies, assets, videos, businessInfo] = await Promise.all([
         supabase
           .from('business_context')
           .select('id', { count: 'exact', head: true })
@@ -72,6 +78,7 @@ export function useOnboardingProgress() {
         countRows('content_strategies', user.id),
         countRows('content_library', user.id),
         countRows('ai_generated_videos', user.id),
+        supabase.from('business_information').select('*').eq('user_id', user.id).maybeSingle(),
       ]);
 
       return {
@@ -79,6 +86,7 @@ export function useOnboardingProgress() {
         hasResearch: research > 0,
         hasStrategy: strategies > 0,
         hasAsset: assets > 0 || videos > 0,
+        profileCompletion: calculateBusinessInfoCompletion(businessInfo.data),
       };
     },
   });
@@ -98,6 +106,13 @@ export function useOnboardingProgress() {
       title: 'Add your business context',
       description: 'Analyze your website so every output is grounded in your brand.',
       done: !!data?.hasContext,
+      to: '/settings',
+    },
+    {
+      id: 'profile',
+      title: 'Fill in your business profile',
+      description: 'Industry, audience, competitors and brand voice — every AI feature falls back to generic output without this.',
+      done: (data?.profileCompletion ?? 0) >= PROFILE_COMPLETE_THRESHOLD,
       to: '/settings',
     },
     {

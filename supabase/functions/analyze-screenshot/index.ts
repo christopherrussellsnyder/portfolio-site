@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { serviceClient } from "../_shared/supabase.ts";
 import { checkRateLimit, clientKey } from "../_shared/rate-limit.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { callLovableGateway } from "../_shared/llm-gateway.ts";
 
 const JSON_SCHEMA = `{
   "metadata": {
@@ -223,18 +224,14 @@ serve(async (req) => {
 
     if (textData) {
       const prompt = TEXT_DATA_ANALYSIS_PROMPT.replace('{DATA}', textData.slice(0, 30000));
-      aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${LOVABLE_API_KEY}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: 'google/gemini-2.5-flash',
-          messages: [
-            { role: 'system', content: 'You are an expert marketing analytics data analyst for both social media and advertising platforms. Return ONLY valid JSON.' },
-            { role: 'user', content: prompt }
-          ],
-          max_tokens: 12000,
-          temperature: 0.3,
-        }),
+      aiResponse = await callLovableGateway(LOVABLE_API_KEY, {
+        model: 'google/gemini-2.5-flash',
+        messages: [
+          { role: 'system', content: 'You are an expert marketing analytics data analyst for both social media and advertising platforms. Return ONLY valid JSON.' },
+          { role: 'user', content: prompt }
+        ],
+        max_tokens: 12000,
+        temperature: 0.3,
       });
     } else {
       let base64Data = imageBase64;
@@ -258,21 +255,17 @@ serve(async (req) => {
         mimeType = 'application/pdf';
       }
 
-      aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${LOVABLE_API_KEY}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: 'google/gemini-2.5-flash',
-          messages: [{
-            role: 'user',
-            content: [
-              { type: 'text', text: IMAGE_ANALYSIS_PROMPT },
-              { type: 'image_url', image_url: { url: `data:${mimeType};base64,${base64Data}` } }
-            ]
-          }],
-          max_tokens: 12000,
-          temperature: 0.3,
-        }),
+      aiResponse = await callLovableGateway(LOVABLE_API_KEY, {
+        model: 'google/gemini-2.5-flash',
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'text', text: IMAGE_ANALYSIS_PROMPT },
+            { type: 'image_url', image_url: { url: `data:${mimeType};base64,${base64Data}` } }
+          ]
+        }],
+        max_tokens: 12000,
+        temperature: 0.3,
       });
     }
 

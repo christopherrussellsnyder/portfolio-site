@@ -59,7 +59,7 @@ function parseExcel(file: File): Promise<string> {
 
         workbook.SheetNames.slice(0, 3).forEach((sheetName) => {
           const sheet = workbook.Sheets[sheetName];
-          const json = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as any[][];
+          const json = XLSX.utils.sheet_to_json<(string | number | boolean | Date | null)[]>(sheet, { header: 1 });
           text += `--- Sheet: ${sheetName} (${json.length} rows) ---\n`;
           const headers = json[0] || [];
           text += `Columns: ${headers.join(', ')}\n`;

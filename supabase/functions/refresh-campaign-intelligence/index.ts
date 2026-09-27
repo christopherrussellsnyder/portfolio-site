@@ -1,6 +1,16 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { serviceClient } from "../_shared/supabase.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { callLovableGateway } from "../_shared/llm-gateway.ts";
+import { assertCronOrAdmin } from "../_shared/cron-auth.ts";
+
+// This function fans out into up to 56 LLM calls per invocation (4 platforms
+// x 14 niches). It previously had no auth check at all, so anyone holding
+// the public anon key -- i.e. everyone, since it's embedded in the frontend
+// bundle -- could trigger it repeatedly and burn through the LLM budget.
+// It's meant to run on a schedule (see the pg_cron job that invokes it),
+// so restrict it to that cron job or an admin/owner triggering a manual
+// refresh, same gate as calculate-prediction-accuracy.
 
 const PLATFORMS = ["meta", "tiktok", "google", "linkedin"];
 const PRIORITY_NICHES = [
@@ -10,22 +20,18 @@ const PRIORITY_NICHES = [
 ];
 
 async function callAI(apiKey: string, prompt: string): Promise<any> {
-  const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-    method: "POST",
-    headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: "google/gemini-3-flash-preview",
-      messages: [
-        {
-          role: "system",
-          content:
-            "You are a senior paid-media analyst producing AI-ESTIMATED directional guidance from prior knowledge. You have NO live access to Meta, Google, TikTok or LinkedIn APIs. Never state a specific ROAS, CPA, CTR or revenue figure as if it were measured — describe direction and relative comparison only, and say what the estimate is based on. Return ONLY valid JSON, no markdown.",
-        },
-        { role: "user", content: prompt },
-      ],
-      temperature: 0.3,
-      max_tokens: 800,
-    }),
+  const res = await callLovableGateway(apiKey, {
+    model: "google/gemini-3-flash-preview",
+    messages: [
+      {
+        role: "system",
+        content:
+          "You are a senior paid-media analyst producing AI-ESTIMATED directional guidance from prior knowledge. You have NO live access to Meta, Google, TikTok or LinkedIn APIs. Never state a specific ROAS, CPA, CTR or revenue figure as if it were measured — describe direction and relative comparison only, and say what the estimate is based on. Return ONLY valid JSON, no markdown.",
+      },
+      { role: "user", content: prompt },
+    ],
+    temperature: 0.3,
+    max_tokens: 800,
   });
   if (!res.ok) throw new Error(`AI ${res.status}: ${await res.text()}`);
   const data = await res.json();
@@ -66,6 +72,10 @@ serve(async (req) => {
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY missing");
 
     const supabase = serviceClient();
+
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const forbidden = await assertCronOrAdmin(supabase, req, serviceKey, corsHeaders);
+    if (forbidden) return forbidden;
 
     // Optional: pass { platform, niche } to refresh a single pair on demand
     let targets: { platform: string; niche: string }[] = [];

@@ -9,12 +9,31 @@ serve(async (req) => {
   }
 
   try {
-    const { userId, action, testData, testId } = await req.json();
-    
     const supabase = serviceClient();
-    
+
+    // This uses a service-role client that bypasses RLS and previously
+    // trusted a client-supplied userId for every read/write -- anyone with a
+    // valid Supabase JWT (even the public anon key) could pass someone
+    // else's userId and read or mutate their A/B tests. Derive userId from
+    // the verified token instead.
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return new Response(JSON.stringify({ error: 'Authentication required' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+    const { data: authData, error: authErr } = await supabase.auth.getUser(
+      authHeader.replace('Bearer ', ''),
+    );
+    if (authErr || !authData.user) {
+      return new Response(JSON.stringify({ error: 'Invalid session' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+    const userId = authData.user.id;
+
+    const { action, testData, testId } = await req.json();
+
     console.log('A/B testing action:', action);
-    
+
     if (action === 'create_test') {
       const { data: test, error } = await supabase
         .from('ab_tests')
@@ -81,8 +100,9 @@ serve(async (req) => {
           status: 'running',
           start_date: new Date().toISOString()
         })
-        .eq('id', testId);
-      
+        .eq('id', testId)
+        .eq('user_id', userId);
+
       if (error) throw error;
       
       return new Response(
@@ -97,8 +117,9 @@ serve(async (req) => {
         .update({
           status: 'paused'
         })
-        .eq('id', testId);
-      
+        .eq('id', testId)
+        .eq('user_id', userId);
+
       if (error) throw error;
       
       return new Response(
@@ -113,8 +134,9 @@ serve(async (req) => {
         .update({
           status: 'running'
         })
-        .eq('id', testId);
-      
+        .eq('id', testId)
+        .eq('user_id', userId);
+
       if (error) throw error;
       
       return new Response(
@@ -124,24 +146,38 @@ serve(async (req) => {
     }
     
     if (action === 'delete_test') {
+      // ab_test_variants/ab_test_results only carry ab_test_id, not user_id,
+      // so ownership has to be checked against the parent test up front.
+      const { data: owned } = await supabase
+        .from('ab_tests')
+        .select('id')
+        .eq('id', testId)
+        .eq('user_id', userId)
+        .maybeSingle();
+      if (!owned) {
+        return new Response(JSON.stringify({ error: 'Test not found' }),
+          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+
       // Delete associated variants first
       await supabase
         .from('ab_test_variants')
         .delete()
         .eq('ab_test_id', testId);
-      
+
       // Delete associated results
       await supabase
         .from('ab_test_results')
         .delete()
         .eq('ab_test_id', testId);
-      
+
       // Delete the test
       const { error } = await supabase
         .from('ab_tests')
         .delete()
-        .eq('id', testId);
-      
+        .eq('id', testId)
+        .eq('user_id', userId);
+
       if (error) throw error;
       
       return new Response(
@@ -155,8 +191,9 @@ serve(async (req) => {
         .from('ab_tests')
         .select('*, ab_test_variants(*)')
         .eq('id', testId)
+        .eq('user_id', userId)
         .single();
-      
+
       if (!test) throw new Error('Test not found');
       
       const { data: significance } = await supabase
@@ -182,6 +219,7 @@ serve(async (req) => {
         .from('ab_tests')
         .select('*, ab_test_variants(*)')
         .eq('id', testData.testId)
+        .eq('user_id', userId)
         .single();
       
       if (!test || test.status !== 'running') {
@@ -211,10 +249,21 @@ serve(async (req) => {
     }
     
     if (action === 'check_for_winner') {
+      const { data: owned } = await supabase
+        .from('ab_tests')
+        .select('id')
+        .eq('id', testId)
+        .eq('user_id', userId)
+        .maybeSingle();
+      if (!owned) {
+        return new Response(JSON.stringify({ error: 'Test not found' }),
+          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+
       await supabase.rpc('auto_select_ab_winner', {
         p_test_id: testId
       });
-      
+
       const { data: updatedTest } = await supabase
         .from('ab_tests')
         .select('*')
