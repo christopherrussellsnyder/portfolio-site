@@ -144,7 +144,17 @@ function buildAnthropicBody(body: Record<string, unknown>): Record<string, unkno
 
   const result: Record<string, unknown> = {
     model: mapModel(body.model),
-    max_tokens: typeof body.max_tokens === "number" ? body.max_tokens : 4096,
+    // 16000 (not 4096) when a caller doesn't set its own value -- six of the
+    // 15 callers never do (ab-test-optimization, generate-ad-script,
+    // generate-caption-variants, generate-client-report, research-analysis,
+    // research-personalize), and 4096 silently truncated generate-ad-script's
+    // output before its "variants" array ever closed: a real run returned a
+    // 200 with no error, JSON.parse (or its regex-extraction fallback) found
+    // no usable "variants" key, and the caller's empty-result branch has no
+    // logging -- so the truncation looked indistinguishable from the model
+    // just returning nothing. This matches Anthropic's own current
+    // guidance (~16000 default for non-streaming requests).
+    max_tokens: typeof body.max_tokens === "number" ? body.max_tokens : 16000,
     messages: anthropicMessages,
     // Low effort (rather than the adaptive-thinking default) for every call:
     // these are marketing-copy/structured-JSON generation tasks, not deep

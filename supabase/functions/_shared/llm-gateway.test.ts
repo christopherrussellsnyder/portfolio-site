@@ -52,6 +52,16 @@ describe('callLovableGateway', () => {
     expect(body.max_tokens).toBe(500);
   });
 
+  it('defaults max_tokens to 16000 (not 4096) when a caller sets none -- 4096 silently truncated generate-ad-script\'s structured output', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(anthropicResponse({ content: [{ type: 'text', text: 'ok' }] }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await callLovableGateway('k', { model: 'google/gemini-2.5-flash', messages: [{ role: 'user', content: 'hi' }] });
+
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.max_tokens).toBe(16000);
+  });
+
   it('never forwards temperature -- claude-sonnet-5-5 rejects a non-default value while adaptive thinking is on', async () => {
     const fetchMock = vi.fn().mockResolvedValue(anthropicResponse({ content: [{ type: 'text', text: 'ok' }] }));
     vi.stubGlobal('fetch', fetchMock);
