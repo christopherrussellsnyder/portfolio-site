@@ -95,17 +95,34 @@ function translateToolChoice(choice: OAIToolChoice): unknown {
 }
 
 // response_format: json_object callers (generate-ad-script, generate-
-// caption-variants, generate-client-report) route through this synthetic
-// forced tool call instead of a text-prompt instruction. Anthropic has no
-// schema-less "just give me valid JSON" mode -- a prompt instruction only
-// asks nicely, and for long content (ad scripts, report narratives) the
-// model sometimes writes a raw control character or an unescaped quote
-// inside a string value, which breaks a strict JSON.parse even though the
-// content is fine (two real bugs from this). Anthropic DOES guarantee
-// structurally valid arguments for a tool call -- its own decoder enforces
-// that, not the model's instruction-following -- so this sidesteps the
-// whole bug class rather than patching each new way text can be malformed.
+// caption-variants, generate-client-report) route through a synthetic tool
+// call instead of a text-prompt instruction. Anthropic has no schema-less
+// "just give me valid JSON" mode -- a prompt instruction only asks nicely,
+// and for long content (ad scripts, report narratives) the model sometimes
+// writes a raw control character or an unescaped quote inside a string
+// value, which breaks a strict JSON.parse even though the content is fine
+// (two real bugs from this). Anthropic DOES guarantee structurally valid
+// arguments for a tool call -- its own decoder enforces that, not the
+// model's instruction-following -- so a tool call sidesteps the whole bug
+// class rather than patching each new way text can be malformed.
+//
+// The call is NOT forced, though: `tool_choice: {type: "tool"|"any"}` is a
+// hard 400 ("... are not supported for this model") on claude-sonnet-5-5 and
+// claude-opus-5-5, the only models this gateway ever maps to (confirmed
+// against a real ad-script failure -- the first version of this forced the
+// call and broke every JSON-mode caller outright). Anthropic's own fix for
+// this is `tool_choice: {type: "auto"}` plus an explicit instruction naming
+// the tool, so that's what both this and the explicit-tools path below do.
 const JSON_MODE_TOOL_NAME = "emit_json";
+
+function forceToolInstruction(toolName: string): string {
+  return `You must call the "${toolName}" tool exactly once with your complete response as its input, and write no other text. (Forced tool_choice is not supported by this model, so this instruction is the only enforcement -- follow it exactly.)`;
+}
+
+function appendSystem(result: Record<string, unknown>, text: string): void {
+  const existing = typeof result.system === "string" ? result.system : "";
+  result.system = existing ? `${existing}\n\n${text}` : text;
+}
 
 function buildAnthropicBody(body: Record<string, unknown>): Record<string, unknown> {
   const messages = (body.messages as OAIMessage[]) ?? [];
@@ -157,11 +174,21 @@ function buildAnthropicBody(body: Record<string, unknown>): Record<string, unkno
         input_schema: { type: "object" },
       },
     ];
-    result.tool_choice = { type: "tool", name: JSON_MODE_TOOL_NAME };
+    result.tool_choice = { type: "auto" };
+    appendSystem(result, forceToolInstruction(JSON_MODE_TOOL_NAME));
   } else if (hasExplicitTools) {
     result.tools = translateTools(body.tools as OAIToolDef[]);
     if (body.tool_choice) {
-      result.tool_choice = translateToolChoice(body.tool_choice as OAIToolChoice);
+      const choice = translateToolChoice(body.tool_choice as OAIToolChoice) as { type: string; name?: string };
+      if (choice.type === "tool" && choice.name) {
+        // Same hard 400 as the json_object path above: Anthropic rejects a
+        // forced tool_choice outright on this gateway's models. Downgrade to
+        // auto + an explicit instruction naming the tool instead.
+        result.tool_choice = { type: "auto" };
+        appendSystem(result, forceToolInstruction(choice.name));
+      } else {
+        result.tool_choice = choice;
+      }
     }
   }
   if (body.stream === true) result.stream = true;
@@ -235,7 +262,7 @@ function translateJsonResponse(
   };
   const toolUse = blocks.find((b) => b.type === "tool_use");
 
-  // json_object mode was routed through the synthetic forced tool call
+  // json_object mode was routed through the synthetic emit_json tool call
   // (see buildAnthropicBody) -- its `input` is already a parsed object that
   // Anthropic itself guarantees is structurally valid, so stringifying it
   // can never produce malformed JSON the way free text occasionally can.
@@ -250,12 +277,12 @@ function translateJsonResponse(
     .filter((b) => b.type === "text")
     .map((b) => b.text ?? "")
     .join("");
-  // Defensive fallback only: json_object mode should always produce the
-  // emit_json tool_use block above. This path fires only if that somehow
-  // doesn't happen (e.g. max_tokens cut the response off before the tool
-  // call), in which case the model may still have been writing free-text
-  // JSON and can hit the same raw-control-character issue the tool-call
-  // routing exists to avoid.
+  // Fallback path: tool_choice can only be "auto" here (Anthropic rejects a
+  // forced choice outright -- see buildAnthropicBody), so an instruction-only
+  // nudge to call emit_json isn't a 100% guarantee the way a forced call
+  // would be. If the model answers in free text instead, it can still hit
+  // the same raw-control-character issue the tool-call routing exists to
+  // avoid, so sanitize this path too rather than treating it as unreachable.
   if (isJsonMode) text = escapeControlCharsInJsonStrings(text);
 
   const message: Record<string, unknown> = { role: "assistant", content: text };

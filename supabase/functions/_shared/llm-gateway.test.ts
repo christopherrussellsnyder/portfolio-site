@@ -89,7 +89,7 @@ describe('callLovableGateway', () => {
     expect(JSON.parse(fetchMock.mock.calls[1][1].body).model).toBe('claude-sonnet-5-5');
   });
 
-  it('routes a JSON-mode request through a forced emit_json tool call and returns its input as choices[0].message.content', async () => {
+  it('routes a JSON-mode request through an auto-choice emit_json tool call (forced tool_choice 400s on this gateway\'s models) and returns its input as choices[0].message.content', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       anthropicResponse({
         content: [{ type: 'tool_use', id: 'toolu_1', name: 'emit_json', input: { a: 1 } }],
@@ -113,7 +113,11 @@ describe('callLovableGateway', () => {
         input_schema: { type: 'object' },
       },
     ]);
-    expect(sentBody.tool_choice).toEqual({ type: 'tool', name: 'emit_json' });
+    // NOT { type: 'tool', name: 'emit_json' } -- claude-sonnet-5-5 and
+    // claude-opus-5-5 both reject a forced tool_choice with a 400, so this
+    // has to stay "auto" with the tool steered from a system instruction.
+    expect(sentBody.tool_choice).toEqual({ type: 'auto' });
+    expect(sentBody.system).toContain('You must call the "emit_json" tool');
 
     const data = await result.json();
     expect(data.choices[0].message.content).toBe('{"a":1}');
@@ -121,7 +125,7 @@ describe('callLovableGateway', () => {
     expect(data.usage.completion_tokens).toBe(4);
   });
 
-  it('does not route json_object mode through the forced tool call when the caller already passed explicit tools', async () => {
+  it('does not route json_object mode through the emit_json tool when the caller already passed explicit tools', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       anthropicResponse({ content: [{ type: 'tool_use', id: 'toolu_1', name: 'provide_recommendations', input: { x: 1 } }] }),
     );
@@ -139,15 +143,15 @@ describe('callLovableGateway', () => {
     expect(sentBody.tools).toEqual([
       { name: 'provide_recommendations', description: '', input_schema: { type: 'object' } },
     ]);
-    expect(sentBody.tool_choice).toEqual({ type: 'tool', name: 'provide_recommendations' });
+    // Same forced-tool_choice downgrade applies to explicit-tools callers.
+    expect(sentBody.tool_choice).toEqual({ type: 'auto' });
+    expect(sentBody.system).toContain('You must call the "provide_recommendations" tool');
   });
 
-  it('falls back to escaping raw control characters in free text if json_object mode somehow returns text instead of a tool_use block', async () => {
-    // Defensive fallback: json_object mode should always produce the
-    // emit_json tool_use block, but if it doesn't (e.g. max_tokens cut the
-    // response off first) the model may still have been writing free-text
-    // JSON and can hit the same raw-newline issue the tool-call routing
-    // exists to avoid.
+  it('falls back to escaping raw control characters in free text if json_object mode returns text instead of a tool_use block', async () => {
+    // tool_choice can only be "auto" here (see above), so the model
+    // ignoring the steering instruction and answering in free text is a
+    // real path, not just a max_tokens edge case -- sanitize it too.
     const brokenJson = '{"variants":[{"script":"Line one\nLine two"}]}';
     expect(() => JSON.parse(brokenJson)).toThrow();
 
@@ -216,7 +220,12 @@ describe('callLovableGateway', () => {
     });
   });
 
-  it('translates OpenAI-style forced tool_choice into an Anthropic tool_use response with a stringified arguments field', async () => {
+  it('downgrades an OpenAI-style forced tool_choice to auto + a steering instruction, and still translates the resulting tool_use into a stringified arguments field', async () => {
+    // Anthropic returns a 400 for a forced tool_choice on claude-sonnet-5-5 /
+    // claude-opus-5-5 ("tool_choice: type \"tool\" and \"any\" are not
+    // supported for this model") -- this reproduces the real
+    // ab-test-optimization failure. The gateway has to send "auto" and
+    // steer via the system prompt instead of forwarding the forced choice.
     const fetchMock = vi.fn().mockResolvedValue(
       anthropicResponse({
         content: [{ type: 'tool_use', id: 'toolu_1', name: 'provide_recommendations', input: { x: 1 } }],
@@ -236,7 +245,8 @@ describe('callLovableGateway', () => {
     expect(sentBody.tools).toEqual([
       { name: 'provide_recommendations', description: '', input_schema: { type: 'object' } },
     ]);
-    expect(sentBody.tool_choice).toEqual({ type: 'tool', name: 'provide_recommendations' });
+    expect(sentBody.tool_choice).toEqual({ type: 'auto' });
+    expect(sentBody.system).toContain('You must call the "provide_recommendations" tool');
 
     const data = await result.json();
     const toolCall = data.choices[0].message.tool_calls[0];
