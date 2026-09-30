@@ -89,9 +89,13 @@ describe('callLovableGateway', () => {
     expect(JSON.parse(fetchMock.mock.calls[1][1].body).model).toBe('claude-sonnet-5-5');
   });
 
-  it('translates a JSON-mode request and Anthropic response back into the OpenAI choices[0].message.content shape', async () => {
+  it('routes a JSON-mode request through a forced emit_json tool call and returns its input as choices[0].message.content', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
-      anthropicResponse({ content: [{ type: 'text', text: '{"a":1}' }], stop_reason: 'end_turn', usage: { input_tokens: 10, output_tokens: 4 } }),
+      anthropicResponse({
+        content: [{ type: 'tool_use', id: 'toolu_1', name: 'emit_json', input: { a: 1 } }],
+        stop_reason: 'tool_use',
+        usage: { input_tokens: 10, output_tokens: 4 },
+      }),
     );
     vi.stubGlobal('fetch', fetchMock);
 
@@ -102,7 +106,14 @@ describe('callLovableGateway', () => {
     });
 
     const sentBody = JSON.parse(fetchMock.mock.calls[0][1].body);
-    expect(sentBody.system).toContain('ONLY a single valid JSON object');
+    expect(sentBody.tools).toEqual([
+      {
+        name: 'emit_json',
+        description: 'Return the requested output as a single JSON object matching the structure described above.',
+        input_schema: { type: 'object' },
+      },
+    ]);
+    expect(sentBody.tool_choice).toEqual({ type: 'tool', name: 'emit_json' });
 
     const data = await result.json();
     expect(data.choices[0].message.content).toBe('{"a":1}');
@@ -110,11 +121,33 @@ describe('callLovableGateway', () => {
     expect(data.usage.completion_tokens).toBe(4);
   });
 
-  it('escapes a literal newline inside a JSON-mode string value so the caller can JSON.parse it (reproduces the real ad-script bug)', async () => {
-    // Claude, writing multi-line ad-script content under a json_object prompt
-    // instruction (not a real schema-enforced mode), sometimes emits an
-    // actual newline byte inside a string value instead of an escaped \n --
-    // this raw string is exactly that shape and fails a plain JSON.parse.
+  it('does not route json_object mode through the forced tool call when the caller already passed explicit tools', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      anthropicResponse({ content: [{ type: 'tool_use', id: 'toolu_1', name: 'provide_recommendations', input: { x: 1 } }] }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await callLovableGateway('k', {
+      model: 'google/gemini-2.5-flash',
+      messages: [{ role: 'user', content: 'go' }],
+      response_format: { type: 'json_object' },
+      tools: [{ type: 'function', function: { name: 'provide_recommendations', parameters: { type: 'object' } } }],
+      tool_choice: { type: 'function', function: { name: 'provide_recommendations' } },
+    });
+
+    const sentBody = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(sentBody.tools).toEqual([
+      { name: 'provide_recommendations', description: '', input_schema: { type: 'object' } },
+    ]);
+    expect(sentBody.tool_choice).toEqual({ type: 'tool', name: 'provide_recommendations' });
+  });
+
+  it('falls back to escaping raw control characters in free text if json_object mode somehow returns text instead of a tool_use block', async () => {
+    // Defensive fallback: json_object mode should always produce the
+    // emit_json tool_use block, but if it doesn't (e.g. max_tokens cut the
+    // response off first) the model may still have been writing free-text
+    // JSON and can hit the same raw-newline issue the tool-call routing
+    // exists to avoid.
     const brokenJson = '{"variants":[{"script":"Line one\nLine two"}]}';
     expect(() => JSON.parse(brokenJson)).toThrow();
 

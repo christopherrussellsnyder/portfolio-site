@@ -94,6 +94,19 @@ function translateToolChoice(choice: OAIToolChoice): unknown {
   return { type: "auto" };
 }
 
+// response_format: json_object callers (generate-ad-script, generate-
+// caption-variants, generate-client-report) route through this synthetic
+// forced tool call instead of a text-prompt instruction. Anthropic has no
+// schema-less "just give me valid JSON" mode -- a prompt instruction only
+// asks nicely, and for long content (ad scripts, report narratives) the
+// model sometimes writes a raw control character or an unescaped quote
+// inside a string value, which breaks a strict JSON.parse even though the
+// content is fine (two real bugs from this). Anthropic DOES guarantee
+// structurally valid arguments for a tool call -- its own decoder enforces
+// that, not the model's instruction-following -- so this sidesteps the
+// whole bug class rather than patching each new way text can be malformed.
+const JSON_MODE_TOOL_NAME = "emit_json";
+
 function buildAnthropicBody(body: Record<string, unknown>): Record<string, unknown> {
   const messages = (body.messages as OAIMessage[]) ?? [];
   const systemTexts = messages
@@ -102,11 +115,8 @@ function buildAnthropicBody(body: Record<string, unknown>): Record<string, unkno
     .filter(Boolean);
 
   const responseFormat = body.response_format as { type?: string } | undefined;
-  if (responseFormat?.type === "json_object") {
-    systemTexts.push(
-      "Respond with ONLY a single valid JSON object. No markdown code fences, no commentary before or after the JSON.",
-    );
-  }
+  const hasExplicitTools = Array.isArray(body.tools) && body.tools.length > 0;
+  const useJsonModeTool = responseFormat?.type === "json_object" && !hasExplicitTools;
 
   const anthropicMessages = messages
     .filter((m) => m.role !== "system")
@@ -139,11 +149,20 @@ function buildAnthropicBody(body: Record<string, unknown>): Record<string, unkno
   // callers sets some temperature value (0.3-0.75) to steer creativity, so
   // silently dropping it here -- rather than erroring on every request --
   // is the correct default; adaptive thinking doesn't need it tuned.
-  if (Array.isArray(body.tools) && body.tools.length) {
+  if (useJsonModeTool) {
+    result.tools = [
+      {
+        name: JSON_MODE_TOOL_NAME,
+        description: "Return the requested output as a single JSON object matching the structure described above.",
+        input_schema: { type: "object" },
+      },
+    ];
+    result.tool_choice = { type: "tool", name: JSON_MODE_TOOL_NAME };
+  } else if (hasExplicitTools) {
     result.tools = translateTools(body.tools as OAIToolDef[]);
-  }
-  if (body.tool_choice) {
-    result.tool_choice = translateToolChoice(body.tool_choice as OAIToolChoice);
+    if (body.tool_choice) {
+      result.tool_choice = translateToolChoice(body.tool_choice as OAIToolChoice);
+    }
   }
   if (body.stream === true) result.stream = true;
   return result;
@@ -210,12 +229,34 @@ function translateJsonResponse(
   isJsonMode: boolean,
 ): Record<string, unknown> {
   const blocks = data.content ?? [];
+  const usage = {
+    prompt_tokens: data.usage?.input_tokens,
+    completion_tokens: data.usage?.output_tokens,
+  };
+  const toolUse = blocks.find((b) => b.type === "tool_use");
+
+  // json_object mode was routed through the synthetic forced tool call
+  // (see buildAnthropicBody) -- its `input` is already a parsed object that
+  // Anthropic itself guarantees is structurally valid, so stringifying it
+  // can never produce malformed JSON the way free text occasionally can.
+  if (isJsonMode && toolUse?.name === JSON_MODE_TOOL_NAME) {
+    return {
+      choices: [{ message: { role: "assistant", content: JSON.stringify(toolUse.input ?? {}) }, finish_reason: data.stop_reason }],
+      usage,
+    };
+  }
+
   let text = blocks
     .filter((b) => b.type === "text")
     .map((b) => b.text ?? "")
     .join("");
+  // Defensive fallback only: json_object mode should always produce the
+  // emit_json tool_use block above. This path fires only if that somehow
+  // doesn't happen (e.g. max_tokens cut the response off before the tool
+  // call), in which case the model may still have been writing free-text
+  // JSON and can hit the same raw-control-character issue the tool-call
+  // routing exists to avoid.
   if (isJsonMode) text = escapeControlCharsInJsonStrings(text);
-  const toolUse = blocks.find((b) => b.type === "tool_use");
 
   const message: Record<string, unknown> = { role: "assistant", content: text };
   if (toolUse) {
@@ -230,10 +271,7 @@ function translateJsonResponse(
 
   return {
     choices: [{ message, finish_reason: data.stop_reason }],
-    usage: {
-      prompt_tokens: data.usage?.input_tokens,
-      completion_tokens: data.usage?.output_tokens,
-    },
+    usage,
   };
 }
 
