@@ -157,19 +157,64 @@ interface AnthropicContentBlock {
   input?: unknown;
 }
 
+// response_format: json_object isn't a hard server-enforced guarantee here
+// the way it is on OpenAI -- buildAnthropicBody only turns it into a prompt
+// instruction (Anthropic's real structured-output mode needs a JSON schema
+// per call, which none of these callers define). For long, multi-line
+// content (ad scripts, report narratives) Claude sometimes writes a literal
+// newline/tab/CR inside a JSON string value instead of the escaped form,
+// which breaks a strict JSON.parse downstream even though the content
+// itself is fine. Escape raw control characters that fall *inside* a
+// string literal; structural whitespace between tokens is untouched.
+function escapeControlCharsInJsonStrings(text: string): string {
+  let result = "";
+  let inString = false;
+  let escaped = false;
+  for (const ch of text) {
+    if (inString) {
+      if (escaped) {
+        result += ch;
+        escaped = false;
+      } else if (ch === "\\") {
+        result += ch;
+        escaped = true;
+      } else if (ch === '"') {
+        result += ch;
+        inString = false;
+      } else if (ch === "\n") {
+        result += "\\n";
+      } else if (ch === "\r") {
+        result += "\\r";
+      } else if (ch === "\t") {
+        result += "\\t";
+      } else {
+        result += ch;
+      }
+    } else {
+      if (ch === '"') inString = true;
+      result += ch;
+    }
+  }
+  return result;
+}
+
 // Anthropic's non-streaming response -> the OpenAI chat-completions shape
 // every caller already reads (choices[0].message.content /
 // choices[0].message.tool_calls[0].function.arguments as a JSON string).
-function translateJsonResponse(data: {
-  content?: AnthropicContentBlock[];
-  stop_reason?: string;
-  usage?: { input_tokens?: number; output_tokens?: number };
-}): Record<string, unknown> {
+function translateJsonResponse(
+  data: {
+    content?: AnthropicContentBlock[];
+    stop_reason?: string;
+    usage?: { input_tokens?: number; output_tokens?: number };
+  },
+  isJsonMode: boolean,
+): Record<string, unknown> {
   const blocks = data.content ?? [];
-  const text = blocks
+  let text = blocks
     .filter((b) => b.type === "text")
     .map((b) => b.text ?? "")
     .join("");
+  if (isJsonMode) text = escapeControlCharsInJsonStrings(text);
   const toolUse = blocks.find((b) => b.type === "tool_use");
 
   const message: Record<string, unknown> = { role: "assistant", content: text };
@@ -243,6 +288,7 @@ export async function callLovableGateway(
   body: Record<string, unknown>,
 ): Promise<Response> {
   const isStream = body.stream === true;
+  const isJsonMode = (body.response_format as { type?: string } | undefined)?.type === "json_object";
   const anthropicBody = buildAnthropicBody(body);
 
   const res = await fetch(ANTHROPIC_API_URL, {
@@ -270,7 +316,7 @@ export async function callLovableGateway(
   }
 
   const data = await res.json();
-  return new Response(JSON.stringify(translateJsonResponse(data)), {
+  return new Response(JSON.stringify(translateJsonResponse(data, isJsonMode)), {
     status: 200,
     headers: { "Content-Type": "application/json" },
   });

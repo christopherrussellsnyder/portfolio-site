@@ -110,6 +110,41 @@ describe('callLovableGateway', () => {
     expect(data.usage.completion_tokens).toBe(4);
   });
 
+  it('escapes a literal newline inside a JSON-mode string value so the caller can JSON.parse it (reproduces the real ad-script bug)', async () => {
+    // Claude, writing multi-line ad-script content under a json_object prompt
+    // instruction (not a real schema-enforced mode), sometimes emits an
+    // actual newline byte inside a string value instead of an escaped \n --
+    // this raw string is exactly that shape and fails a plain JSON.parse.
+    const brokenJson = '{"variants":[{"script":"Line one\nLine two"}]}';
+    expect(() => JSON.parse(brokenJson)).toThrow();
+
+    const fetchMock = vi.fn().mockResolvedValue(anthropicResponse({ content: [{ type: 'text', text: brokenJson }] }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await callLovableGateway('k', {
+      model: 'google/gemini-2.5-flash',
+      messages: [{ role: 'user', content: 'write a script' }],
+      response_format: { type: 'json_object' },
+    });
+
+    const data = await result.json();
+    const parsed = JSON.parse(data.choices[0].message.content);
+    expect(parsed.variants[0].script).toBe('Line one\nLine two');
+  });
+
+  it('does NOT touch raw newlines outside json_object mode (e.g. plain chat content)', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(anthropicResponse({ content: [{ type: 'text', text: 'Line one\nLine two' }] }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await callLovableGateway('k', {
+      model: 'google/gemini-2.5-flash',
+      messages: [{ role: 'user', content: 'hi' }],
+    });
+
+    const data = await result.json();
+    expect(data.choices[0].message.content).toBe('Line one\nLine two');
+  });
+
   it('translates image_url content parts (base64 image and PDF) into Anthropic image/document blocks', async () => {
     const fetchMock = vi.fn(() => Promise.resolve(anthropicResponse({ content: [{ type: 'text', text: 'ok' }] })));
     vi.stubGlobal('fetch', fetchMock);
