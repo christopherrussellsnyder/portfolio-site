@@ -49,8 +49,22 @@ describe('callLovableGateway', () => {
     expect(body.model).toBe('claude-sonnet-5-5');
     expect(body.system).toBe('You are terse.');
     expect(body.messages).toEqual([{ role: 'user', content: 'hi' }]);
-    expect(body.temperature).toBe(0.7);
     expect(body.max_tokens).toBe(500);
+  });
+
+  it('never forwards temperature -- claude-sonnet-5-5 rejects a non-default value while adaptive thinking is on', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(anthropicResponse({ content: [{ type: 'text', text: 'ok' }] }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await callLovableGateway('k', {
+      model: 'google/gemini-3-flash-preview',
+      messages: [{ role: 'user', content: 'hi' }],
+      temperature: 0.7,
+    });
+
+    const [, init] = fetchMock.mock.calls[0];
+    const body = JSON.parse(init.body);
+    expect(body).not.toHaveProperty('temperature');
   });
 
   it('falls back to claude-haiku-4-5 for the cheap-tier alias and claude-sonnet-5-5 for an unknown model', async () => {

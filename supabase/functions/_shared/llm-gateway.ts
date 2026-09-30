@@ -121,7 +121,13 @@ function buildAnthropicBody(body: Record<string, unknown>): Record<string, unkno
     messages: anthropicMessages,
   };
   if (systemTexts.length) result.system = systemTexts.join("\n\n");
-  if (typeof body.temperature === "number") result.temperature = body.temperature;
+  // Deliberately NOT forwarding `temperature`: claude-sonnet-5-5 (and every
+  // model this gateway maps to) runs adaptive thinking by default, and a
+  // non-default temperature is rejected with a 400 while thinking is active
+  // ("`temperature` is deprecated for this model"). Every one of the 15
+  // callers sets some temperature value (0.3-0.75) to steer creativity, so
+  // silently dropping it here -- rather than erroring on every request --
+  // is the correct default; adaptive thinking doesn't need it tuned.
   if (Array.isArray(body.tools) && body.tools.length) {
     result.tools = translateTools(body.tools as OAIToolDef[]);
   }
