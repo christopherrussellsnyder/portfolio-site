@@ -119,6 +119,17 @@ function buildAnthropicBody(body: Record<string, unknown>): Record<string, unkno
     model: mapModel(body.model),
     max_tokens: typeof body.max_tokens === "number" ? body.max_tokens : 4096,
     messages: anthropicMessages,
+    // Low effort (rather than the adaptive-thinking default) for every call:
+    // these are marketing-copy/structured-JSON generation tasks, not deep
+    // multi-step reasoning, so the quality tradeoff is small -- but the
+    // latency difference is not. generate-strategy chains up to ~6
+    // sequential/parallel calls in one request (grounding, overview
+    // candidates with retries, two content batches, a critic pass); at
+    // default effort that chain took ~150s end to end and was hitting
+    // Supabase's function execution limit outright (an abrupt non-2xx kill,
+    // not a clean error response). Low effort keeps every one of the 15
+    // callers comfortably inside the window.
+    output_config: { effort: "low" },
   };
   if (systemTexts.length) result.system = systemTexts.join("\n\n");
   // Deliberately NOT forwarding `temperature`: claude-sonnet-5-5 (and every

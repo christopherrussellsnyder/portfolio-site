@@ -67,6 +67,17 @@ describe('callLovableGateway', () => {
     expect(body).not.toHaveProperty('temperature');
   });
 
+  it('always requests low effort to keep multi-call chains (e.g. generate-strategy) inside the function timeout', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(anthropicResponse({ content: [{ type: 'text', text: 'ok' }] }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await callLovableGateway('k', { model: 'google/gemini-3-flash-preview', messages: [{ role: 'user', content: 'hi' }] });
+
+    const [, init] = fetchMock.mock.calls[0];
+    const body = JSON.parse(init.body);
+    expect(body.output_config).toEqual({ effort: 'low' });
+  });
+
   it('falls back to claude-haiku-4-5 for the cheap-tier alias and claude-sonnet-5-5 for an unknown model', async () => {
     const fetchMock = vi.fn(() => Promise.resolve(anthropicResponse({ content: [{ type: 'text', text: 'ok' }] })));
     vi.stubGlobal('fetch', fetchMock);
