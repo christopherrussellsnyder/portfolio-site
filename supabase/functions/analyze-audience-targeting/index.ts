@@ -168,11 +168,11 @@ Provide targeting recommendations in the following JSON format:
 Ensure all recommendations are specific, actionable, and directly applicable to the business profile provided. Focus on high-intent audiences likely to convert.`;
 
     // Call Lovable AI API
-    const lovableApiKey = Deno.env.get('LOVABLE_API_KEY');
+    const anthropicApiKey = Deno.env.get('ANTHROPIC_API_KEY');
     let recommendations;
 
-    if (lovableApiKey) {
-      const aiResponse = await callLovableGateway(lovableApiKey, {
+    if (anthropicApiKey) {
+      const aiResponse = await callLovableGateway(anthropicApiKey, {
         model: MODEL,
         messages: [
           {

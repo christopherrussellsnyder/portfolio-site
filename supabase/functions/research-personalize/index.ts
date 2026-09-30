@@ -10,7 +10,7 @@ import { getCorsHeaders } from "../_shared/cors.ts";
 import { isFounderEmail } from "../_shared/founder.ts";
 import { callLovableGateway } from "../_shared/llm-gateway.ts";
 
-const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY") ?? "";
+const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
 const CACHE_TTL_HOURS = 24 * 7;
 const FORCE_REFRESH_COOLDOWN_HOURS = 12;
 
@@ -129,10 +129,10 @@ async function generatePersonalization(
   trends: Record<string, unknown>,
   ctx: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
-  if (!LOVABLE_API_KEY) throw new Error("Missing LOVABLE_API_KEY");
+  if (!ANTHROPIC_API_KEY) throw new Error("Missing ANTHROPIC_API_KEY");
   const prompt = buildPrompt(platform, mode, industry, trends, ctx);
 
-  const resp = await callLovableGateway(LOVABLE_API_KEY, {
+  const resp = await callLovableGateway(ANTHROPIC_API_KEY, {
     model: "google/gemini-2.5-flash-lite",
     messages: [
       { role: "system", content: "You return only valid JSON. No markdown fences." },

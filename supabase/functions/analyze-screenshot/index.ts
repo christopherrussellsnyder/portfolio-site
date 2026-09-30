@@ -207,9 +207,9 @@ serve(async (req) => {
   try {
     const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+    const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
 
-    if (!LOVABLE_API_KEY) {
+    if (!ANTHROPIC_API_KEY) {
       return new Response(JSON.stringify({ error: 'AI service not configured' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
@@ -224,7 +224,7 @@ serve(async (req) => {
 
     if (textData) {
       const prompt = TEXT_DATA_ANALYSIS_PROMPT.replace('{DATA}', textData.slice(0, 30000));
-      aiResponse = await callLovableGateway(LOVABLE_API_KEY, {
+      aiResponse = await callLovableGateway(ANTHROPIC_API_KEY, {
         model: 'google/gemini-2.5-flash',
         messages: [
           { role: 'system', content: 'You are an expert marketing analytics data analyst for both social media and advertising platforms. Return ONLY valid JSON.' },
@@ -255,7 +255,7 @@ serve(async (req) => {
         mimeType = 'application/pdf';
       }
 
-      aiResponse = await callLovableGateway(LOVABLE_API_KEY, {
+      aiResponse = await callLovableGateway(ANTHROPIC_API_KEY, {
         model: 'google/gemini-2.5-flash',
         messages: [{
           role: 'user',

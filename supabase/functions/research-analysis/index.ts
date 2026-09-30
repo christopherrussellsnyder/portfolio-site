@@ -29,7 +29,7 @@ import {
   type IntelResult,
 } from "../_shared/strategy-intel.ts";
 
-const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY") ?? "";
+const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
 const CACHE_TTL_HOURS = 24 * 7; // 7 days — trends move weekly, not hourly
 const FORCE_REFRESH_COOLDOWN_HOURS = 12; // per platform+mode+industry, non-founder
 
@@ -131,10 +131,10 @@ async function generateReport(
   industry: string,
   groundingBlock: string,
 ): Promise<Record<string, unknown>> {
-  if (!LOVABLE_API_KEY) throw new Error("Missing LOVABLE_API_KEY");
+  if (!ANTHROPIC_API_KEY) throw new Error("Missing ANTHROPIC_API_KEY");
   const prompt = buildPrompt(platform, mode, industry, groundingBlock);
 
-  const resp = await callLovableGateway(LOVABLE_API_KEY, {
+  const resp = await callLovableGateway(ANTHROPIC_API_KEY, {
     model: "google/gemini-2.5-flash-lite", // cheapest capable model for structured JSON research
     messages: [
       { role: "system", content: "You return only valid JSON. No markdown fences." },

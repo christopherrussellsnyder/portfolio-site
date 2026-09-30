@@ -38,8 +38,8 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
+    const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
+    if (!ANTHROPIC_API_KEY) {
       return new Response(JSON.stringify({ error: "AI not configured" }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -95,7 +95,7 @@ serve(async (req) => {
       ? `User plan: ${sub.plan_type || "starter"} (${sub.status})`
       : "User plan: starter (free)";
 
-    const aiRes = await callLovableGateway(LOVABLE_API_KEY, {
+    const aiRes = await callLovableGateway(ANTHROPIC_API_KEY, {
       model: "google/gemini-3-flash-preview",
       messages: [
         { role: "system", content: `${SYSTEM_PROMPT}\n\nUSER CONTEXT:\nEmail: ${user.email}\n${planContext}` },

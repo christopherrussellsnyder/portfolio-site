@@ -1,26 +1,260 @@
-// Single source of truth for the Lovable AI Gateway's request shape (URL,
-// auth header, content type). Every generation function was independently
-// duplicating this fetch call — deduplicating it here means the endpoint or
-// auth format only ever needs to change in one place.
-//
-// This deliberately returns the raw fetch Response rather than parsed text:
-// callers differ meaningfully in status-code handling (some retry on 429/5xx,
-// some fall back to deterministic generation on any failure, some return
-// custom error payloads) and in how they use the parsed body (token usage
-// logging, tool-call extraction, plain message content) — none of that
-// interpretation belongs in a shared layer.
-const LOVABLE_GATEWAY_URL = 'https://ai.gateway.lovable.dev/v1/chat/completions';
+// Single source of truth for calling the LLM. Every generation function
+// builds an OpenAI-chat-completions-shaped request (model, messages,
+// temperature, max_tokens, response_format, tools/tool_choice, stream) and
+// reads an OpenAI-shaped response (choices[0].message.content, tool_calls,
+// or an OpenAI-style SSE delta stream) -- that contract predates this file
+// and touches 15 functions, so instead of changing every call site this
+// layer translates to/from Anthropic's Messages API underneath it. Callers
+// are unaware the underlying provider changed.
+const ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages";
+const ANTHROPIC_VERSION = "2023-06-01";
+
+// Every model string already in use across the app, mapped to a Claude tier.
+// Two tiers, matching the app's existing creative-vs-structured/cheap split:
+// gemini-3-flash-preview and gpt-5-mini were the "reasoning/creative" tier,
+// gemini-2.5-flash-lite was the cheap/structured tier. Unknown model strings
+// (or ones added later without updating this map) fall back to Sonnet rather
+// than silently erroring.
+const MODEL_MAP: Record<string, string> = {
+  "google/gemini-3-flash-preview": "claude-sonnet-5-5",
+  "google/gemini-2.5-flash": "claude-sonnet-5-5",
+  "google/gemini-2.5-flash-lite": "claude-haiku-4-5",
+  "openai/gpt-5-mini": "claude-sonnet-5-5",
+};
+
+function mapModel(model: unknown): string {
+  if (typeof model === "string") {
+    if (MODEL_MAP[model]) return MODEL_MAP[model];
+    // A handful of call sites read a *_MODEL_OVERRIDE env var for this field --
+    // let those be pointed directly at a real Claude model id too, not just
+    // the legacy Gemini/OpenAI aliases above.
+    if (model.startsWith("claude-")) return model;
+  }
+  return "claude-sonnet-5-5";
+}
+
+interface OAIContentPart {
+  type: string;
+  text?: string;
+  image_url?: { url: string };
+}
+type OAIContent = string | OAIContentPart[];
+interface OAIMessage {
+  role: string;
+  content: OAIContent;
+}
+interface OAIToolDef {
+  type: string;
+  function: { name: string; description?: string; parameters?: unknown };
+}
+interface OAIToolChoice {
+  type: string;
+  function?: { name: string };
+}
+
+// image_url entries carry a data: URI for every current caller (base64
+// screenshots/photos, or PDFs -- Gemini accepted PDFs through the same
+// image_url field, Anthropic wants a separate `document` block for them).
+// A bare remote URL is also handled since nothing rules it out structurally.
+function translateContent(content: OAIContent): unknown {
+  if (typeof content === "string") return content;
+  return content.map((part) => {
+    if (part.type === "text") return { type: "text", text: part.text ?? "" };
+    if (part.type === "image_url" && part.image_url?.url) {
+      const url = part.image_url.url;
+      const dataMatch = /^data:([^;]+);base64,([\s\S]+)$/.exec(url);
+      if (dataMatch) {
+        const [, mediaType, data] = dataMatch;
+        if (mediaType === "application/pdf") {
+          return { type: "document", source: { type: "base64", media_type: mediaType, data } };
+        }
+        return { type: "image", source: { type: "base64", media_type: mediaType, data } };
+      }
+      return { type: "image", source: { type: "url", url } };
+    }
+    return { type: "text", text: "" };
+  });
+}
+
+function translateTools(tools: OAIToolDef[]): unknown[] {
+  return tools
+    .filter((t) => t.type === "function" && t.function?.name)
+    .map((t) => ({
+      name: t.function.name,
+      description: t.function.description ?? "",
+      input_schema: t.function.parameters ?? { type: "object", properties: {} },
+    }));
+}
+
+function translateToolChoice(choice: OAIToolChoice): unknown {
+  if (choice.type === "function" && choice.function?.name) {
+    return { type: "tool", name: choice.function.name };
+  }
+  if (choice.type === "none") return { type: "none" };
+  return { type: "auto" };
+}
+
+function buildAnthropicBody(body: Record<string, unknown>): Record<string, unknown> {
+  const messages = (body.messages as OAIMessage[]) ?? [];
+  const systemTexts = messages
+    .filter((m) => m.role === "system")
+    .map((m) => (typeof m.content === "string" ? m.content : ""))
+    .filter(Boolean);
+
+  const responseFormat = body.response_format as { type?: string } | undefined;
+  if (responseFormat?.type === "json_object") {
+    systemTexts.push(
+      "Respond with ONLY a single valid JSON object. No markdown code fences, no commentary before or after the JSON.",
+    );
+  }
+
+  const anthropicMessages = messages
+    .filter((m) => m.role !== "system")
+    .map((m) => ({
+      role: m.role === "assistant" ? "assistant" : "user",
+      content: translateContent(m.content),
+    }));
+
+  const result: Record<string, unknown> = {
+    model: mapModel(body.model),
+    max_tokens: typeof body.max_tokens === "number" ? body.max_tokens : 4096,
+    messages: anthropicMessages,
+  };
+  if (systemTexts.length) result.system = systemTexts.join("\n\n");
+  if (typeof body.temperature === "number") result.temperature = body.temperature;
+  if (Array.isArray(body.tools) && body.tools.length) {
+    result.tools = translateTools(body.tools as OAIToolDef[]);
+  }
+  if (body.tool_choice) {
+    result.tool_choice = translateToolChoice(body.tool_choice as OAIToolChoice);
+  }
+  if (body.stream === true) result.stream = true;
+  return result;
+}
+
+interface AnthropicContentBlock {
+  type: string;
+  text?: string;
+  id?: string;
+  name?: string;
+  input?: unknown;
+}
+
+// Anthropic's non-streaming response -> the OpenAI chat-completions shape
+// every caller already reads (choices[0].message.content /
+// choices[0].message.tool_calls[0].function.arguments as a JSON string).
+function translateJsonResponse(data: {
+  content?: AnthropicContentBlock[];
+  stop_reason?: string;
+  usage?: { input_tokens?: number; output_tokens?: number };
+}): Record<string, unknown> {
+  const blocks = data.content ?? [];
+  const text = blocks
+    .filter((b) => b.type === "text")
+    .map((b) => b.text ?? "")
+    .join("");
+  const toolUse = blocks.find((b) => b.type === "tool_use");
+
+  const message: Record<string, unknown> = { role: "assistant", content: text };
+  if (toolUse) {
+    message.tool_calls = [
+      {
+        id: toolUse.id ?? "tool_0",
+        type: "function",
+        function: { name: toolUse.name, arguments: JSON.stringify(toolUse.input ?? {}) },
+      },
+    ];
+  }
+
+  return {
+    choices: [{ message, finish_reason: data.stop_reason }],
+    usage: {
+      prompt_tokens: data.usage?.input_tokens,
+      completion_tokens: data.usage?.output_tokens,
+    },
+  };
+}
+
+// Anthropic's SSE event stream -> the OpenAI-style `data: {choices:[{delta:
+// {content}}]}` chunks the one streaming caller (ai-chat, and its
+// ChatArea.tsx frontend reader) already parses, ending in `data: [DONE]`.
+function translateStream(source: ReadableStream<Uint8Array>): ReadableStream<Uint8Array> {
+  const decoder = new TextDecoder();
+  const encoder = new TextEncoder();
+  let buffer = "";
+
+  return new ReadableStream({
+    async start(controller) {
+      const reader = source.getReader();
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() ?? "";
+          for (const line of lines) {
+            if (!line.startsWith("data:")) continue;
+            const payload = line.slice(5).trim();
+            if (!payload) continue;
+            let evt: { type?: string; delta?: { type?: string; text?: string } };
+            try {
+              evt = JSON.parse(payload);
+            } catch {
+              continue;
+            }
+            if (evt.type === "content_block_delta" && evt.delta?.type === "text_delta") {
+              const chunk = { choices: [{ delta: { content: evt.delta.text ?? "" } }] };
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`));
+            } else if (evt.type === "message_stop") {
+              controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+            }
+          }
+        }
+      } catch (e) {
+        controller.error(e);
+        return;
+      } finally {
+        controller.close();
+      }
+    },
+  });
+}
 
 export async function callLovableGateway(
   apiKey: string,
   body: Record<string, unknown>,
 ): Promise<Response> {
-  return fetch(LOVABLE_GATEWAY_URL, {
-    method: 'POST',
+  const isStream = body.stream === true;
+  const anthropicBody = buildAnthropicBody(body);
+
+  const res = await fetch(ANTHROPIC_API_URL, {
+    method: "POST",
     headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
+      "x-api-key": apiKey,
+      "anthropic-version": ANTHROPIC_VERSION,
+      "Content-Type": "application/json",
     },
-    body: JSON.stringify(body),
+    body: JSON.stringify(anthropicBody),
+  });
+
+  if (!res.ok) {
+    // Preserve the real status (429/etc.) so callers' existing status-code
+    // branches still fire; re-wrap the body so `.text()`/`.json()` on it works.
+    const errText = await res.text();
+    return new Response(errText, { status: res.status, headers: { "Content-Type": "application/json" } });
+  }
+
+  if (isStream) {
+    return new Response(translateStream(res.body!), {
+      status: res.status,
+      headers: { "Content-Type": "text/event-stream" },
+    });
+  }
+
+  const data = await res.json();
+  return new Response(JSON.stringify(translateJsonResponse(data)), {
+    status: 200,
+    headers: { "Content-Type": "application/json" },
   });
 }

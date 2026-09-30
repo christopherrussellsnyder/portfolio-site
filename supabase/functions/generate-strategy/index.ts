@@ -755,11 +755,11 @@ serve(async (req) => {
   }
 
   try {
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+    const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
     const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
-    if (!LOVABLE_API_KEY) {
+    if (!ANTHROPIC_API_KEY) {
       return new Response(
         JSON.stringify({ error: 'AI service not configured' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -1245,7 +1245,7 @@ serve(async (req) => {
       const settled = await Promise.allSettled(
         Array.from({ length: OVERVIEW_CANDIDATES }, (_, i) =>
           callAIWithRetry(
-            LOVABLE_API_KEY, overviewPrompt, systemPrompt, 8000, MODEL_CREATIVE, 3, `overview candidate ${i + 1}`,
+            ANTHROPIC_API_KEY, overviewPrompt, systemPrompt, 8000, MODEL_CREATIVE, 3, `overview candidate ${i + 1}`,
           ),
         ),
       );
@@ -1319,7 +1319,7 @@ serve(async (req) => {
       let batchPosts: any[] = [];
       try {
         const batchText = await callAIWithRetry(
-          LOVABLE_API_KEY, batchPrompt, systemPrompt, 16000, MODEL_CREATIVE, 3, `batch ${batchIdx + 1}`,
+          ANTHROPIC_API_KEY, batchPrompt, systemPrompt, 16000, MODEL_CREATIVE, 3, `batch ${batchIdx + 1}`,
         );
         const parsed = parseJSONSafe(batchText);
         batchPosts = Array.isArray(parsed) ? parsed : (parsed.posts || [parsed]);
@@ -1355,7 +1355,7 @@ serve(async (req) => {
       // ===== CMO critic pass: grade this batch and rewrite anything weak =====
       if (batchPosts.length > 0) {
         batchPosts = await criticPass(
-          LOVABLE_API_KEY,
+          ANTHROPIC_API_KEY,
           batchPosts,
           ctx,
           platform,
