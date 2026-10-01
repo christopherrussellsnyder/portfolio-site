@@ -115,8 +115,33 @@ function translateToolChoice(choice: OAIToolChoice): unknown {
 // the tool, so that's what both this and the explicit-tools path below do.
 const JSON_MODE_TOOL_NAME = "emit_json";
 
+// A real ad-script failure showed the model taking "with your complete
+// response as its input" too literally: it called emit_json correctly, but
+// nested the actual answer one level deeper under a key literally named
+// "input" -- {"input": {"variants": [...]}} instead of {"variants": [...]}
+// -- because the tool has no declared properties to anchor it (the whole
+// point of JSON_MODE_TOOL_NAME's permissive schema is that callers' shapes
+// vary). The wording below spells out "do not nest under a wrapper key" to
+// head that off; translateJsonResponse also unwraps a sole "input" key
+// defensively, since a prompt instruction is never a 100% guarantee.
 function forceToolInstruction(toolName: string): string {
-  return `You must call the "${toolName}" tool exactly once with your complete response as its input, and write no other text. (Forced tool_choice is not supported by this model, so this instruction is the only enforcement -- follow it exactly.)`;
+  return `You must call the "${toolName}" tool exactly once, and write no other text. Pass the complete result directly as the tool's arguments -- do NOT nest it one level deeper under a wrapper key such as "input" or "arguments"; the arguments object you pass IS the result itself. (Forced tool_choice is not supported by this model, so this instruction is the only enforcement -- follow it exactly.)`;
+}
+
+// Defensive unwrap for the exact failure above: if the model ignored the
+// instruction and wrapped its answer under a sole "input" key, recover the
+// real payload instead of silently returning an empty/wrong-shaped object.
+function unwrapNestedInput(value: unknown): unknown {
+  if (
+    value && typeof value === "object" && !Array.isArray(value) &&
+    Object.keys(value as Record<string, unknown>).length === 1 &&
+    "input" in (value as Record<string, unknown>) &&
+    typeof (value as Record<string, unknown>).input === "object" &&
+    (value as Record<string, unknown>).input !== null
+  ) {
+    return (value as Record<string, unknown>).input;
+  }
+  return value;
 }
 
 function appendSystem(result: Record<string, unknown>, text: string): void {
@@ -277,8 +302,9 @@ function translateJsonResponse(
   // Anthropic itself guarantees is structurally valid, so stringifying it
   // can never produce malformed JSON the way free text occasionally can.
   if (isJsonMode && toolUse?.name === JSON_MODE_TOOL_NAME) {
+    const payload = unwrapNestedInput(toolUse.input ?? {});
     return {
-      choices: [{ message: { role: "assistant", content: JSON.stringify(toolUse.input ?? {}) }, finish_reason: data.stop_reason }],
+      choices: [{ message: { role: "assistant", content: JSON.stringify(payload) }, finish_reason: data.stop_reason }],
       usage,
     };
   }

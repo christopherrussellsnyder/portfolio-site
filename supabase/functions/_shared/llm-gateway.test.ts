@@ -135,6 +135,51 @@ describe('callLovableGateway', () => {
     expect(data.usage.completion_tokens).toBe(4);
   });
 
+  it('unwraps a real-world emit_json call that nested the answer under a sole "input" key (reproduces the actual generate-ad-script failure)', async () => {
+    // A real production log showed the model calling emit_json correctly
+    // but, with no declared properties on its permissive schema to anchor
+    // it, nesting the real answer one level deeper: {"input": {"variants":
+    // [...]}} instead of {"variants": [...]}. generate-ad-script's
+    // JSON.parse(content).variants then came up undefined -- a 200 with a
+    // tool_use block, but the caller's empty-result branch had no logging,
+    // so it looked identical to the model returning nothing.
+    const fetchMock = vi.fn().mockResolvedValue(
+      anthropicResponse({
+        content: [{ type: 'tool_use', id: 'toolu_1', name: 'emit_json', input: { input: { variants: [{ script: 'hi' }] } } }],
+        stop_reason: 'tool_use',
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await callLovableGateway('k', {
+      model: 'google/gemini-2.5-flash',
+      messages: [{ role: 'user', content: 'give me json' }],
+      response_format: { type: 'json_object' },
+    });
+
+    const data = await result.json();
+    const parsed = JSON.parse(data.choices[0].message.content);
+    expect(parsed).toEqual({ variants: [{ script: 'hi' }] });
+  });
+
+  it('does NOT unwrap a correctly-shaped answer that happens to have its own top-level "input" field alongside other fields', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      anthropicResponse({
+        content: [{ type: 'tool_use', id: 'toolu_1', name: 'emit_json', input: { input: 'user typed this', other: 1 } }],
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await callLovableGateway('k', {
+      model: 'google/gemini-2.5-flash',
+      messages: [{ role: 'user', content: 'give me json' }],
+      response_format: { type: 'json_object' },
+    });
+
+    const data = await result.json();
+    expect(JSON.parse(data.choices[0].message.content)).toEqual({ input: 'user typed this', other: 1 });
+  });
+
   it('does not route json_object mode through the emit_json tool when the caller already passed explicit tools', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       anthropicResponse({ content: [{ type: 'tool_use', id: 'toolu_1', name: 'provide_recommendations', input: { x: 1 } }] }),
