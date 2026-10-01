@@ -2,12 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { isFounderEmail } from './founder';
 
 describe('isFounderEmail', () => {
-  it('matches the founder email exactly', () => {
+  it('matches a founder email exactly', () => {
     expect(isFounderEmail('chrissnyder3456@gmail.com')).toBe(true);
+    expect(isFounderEmail('chrissnyder5678@gmail.com')).toBe(true);
   });
 
   it('is case-insensitive', () => {
     expect(isFounderEmail('ChrisSnyder3456@GMAIL.com')).toBe(true);
+    expect(isFounderEmail('ChrisSnyder5678@GMAIL.com')).toBe(true);
   });
 
   it('rejects other emails', () => {
