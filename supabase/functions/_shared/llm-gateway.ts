@@ -115,33 +115,46 @@ function translateToolChoice(choice: OAIToolChoice): unknown {
 // the tool, so that's what both this and the explicit-tools path below do.
 const JSON_MODE_TOOL_NAME = "emit_json";
 
-// A real ad-script failure showed the model taking "with your complete
-// response as its input" too literally: it called emit_json correctly, but
-// nested the actual answer one level deeper under a key literally named
-// "input" -- {"input": {"variants": [...]}} instead of {"variants": [...]}
-// -- because the tool has no declared properties to anchor it (the whole
-// point of JSON_MODE_TOOL_NAME's permissive schema is that callers' shapes
-// vary). The wording below spells out "do not nest under a wrapper key" to
-// head that off; translateJsonResponse also unwraps a sole "input" key
-// defensively, since a prompt instruction is never a 100% guarantee.
+// Two separate real ad-script failures showed the model nesting its answer
+// one level deeper than it should -- first under a key named "input", then
+// (after that word was named in this very instruction as an example of what
+// NOT to do) under "arguments" instead, taken straight from the other
+// example in the same sentence. JSON_MODE_TOOL_NAME's schema is deliberately
+// permissive ({type: "object"}, no declared properties -- callers' shapes
+// vary), so the model has nothing to anchor its arguments to and reaches for
+// some generic "this is the payload" container word. Naming specific words
+// to avoid turned out to hand the model its next guess, so this no longer
+// names any -- structure, not wording, is what has to catch it now. See
+// unwrapContainerKey below, which unwraps ANY single generic wrapper key
+// rather than matching one specific name.
 function forceToolInstruction(toolName: string): string {
-  return `You must call the "${toolName}" tool exactly once, and write no other text. Pass the complete result directly as the tool's arguments -- do NOT nest it one level deeper under a wrapper key such as "input" or "arguments"; the arguments object you pass IS the result itself. (Forced tool_choice is not supported by this model, so this instruction is the only enforcement -- follow it exactly.)`;
+  return `You must call the "${toolName}" tool exactly once, and write no other text. The JSON object you were asked to produce IS the tool's arguments object -- pass its fields directly at the top level of the call. Do not nest it one level deeper inside any additional field first. (Forced tool_choice is not supported by this model, so this instruction is the only enforcement -- follow it exactly.)`;
 }
 
-// Defensive unwrap for the exact failure above: if the model ignored the
-// instruction and wrapped its answer under a sole "input" key, recover the
-// real payload instead of silently returning an empty/wrong-shaped object.
-function unwrapNestedInput(value: unknown): unknown {
-  if (
-    value && typeof value === "object" && !Array.isArray(value) &&
-    Object.keys(value as Record<string, unknown>).length === 1 &&
-    "input" in (value as Record<string, unknown>) &&
-    typeof (value as Record<string, unknown>).input === "object" &&
-    (value as Record<string, unknown>).input !== null
-  ) {
-    return (value as Record<string, unknown>).input;
+// Defensive unwrap for the failure described above. A prompt instruction
+// alone has now failed twice in a row with two different wrapper words, so
+// this matches on STRUCTURE instead of a specific key name: an object with
+// exactly one key, whose value is itself a non-array object, is recursively
+// unwrapped. Bounded to a few levels against pathological nesting.
+//
+// Why this is safe for every current json_object caller: all three
+// (generate-ad-script, generate-caption-variants, generate-client-report)
+// expect either multiple top-level keys, or a single key whose value is an
+// ARRAY ({"variants": [...]}) -- arrays are deliberately excluded below, so
+// a correctly-shaped real answer is never touched. A future caller whose
+// real schema is genuinely a single key wrapping an object would be a false
+// positive here; none of the current ones are shaped that way.
+function unwrapContainerKey(value: unknown): unknown {
+  let current = value;
+  for (let depth = 0; depth < 3; depth++) {
+    if (!current || typeof current !== "object" || Array.isArray(current)) break;
+    const keys = Object.keys(current as Record<string, unknown>);
+    if (keys.length !== 1) break;
+    const inner = (current as Record<string, unknown>)[keys[0]];
+    if (!inner || typeof inner !== "object" || Array.isArray(inner)) break;
+    current = inner;
   }
-  return value;
+  return current;
 }
 
 function appendSystem(result: Record<string, unknown>, text: string): void {
@@ -302,7 +315,7 @@ function translateJsonResponse(
   // Anthropic itself guarantees is structurally valid, so stringifying it
   // can never produce malformed JSON the way free text occasionally can.
   if (isJsonMode && toolUse?.name === JSON_MODE_TOOL_NAME) {
-    const payload = unwrapNestedInput(toolUse.input ?? {});
+    const payload = unwrapContainerKey(toolUse.input ?? {});
     return {
       choices: [{ message: { role: "assistant", content: JSON.stringify(payload) }, finish_reason: data.stop_reason }],
       usage,

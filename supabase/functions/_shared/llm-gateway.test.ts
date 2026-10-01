@@ -162,6 +162,67 @@ describe('callLovableGateway', () => {
     expect(parsed).toEqual({ variants: [{ script: 'hi' }] });
   });
 
+  it('unwraps a real-world emit_json call that nested the answer under "arguments" instead (the SAME bug recurred with a different wrapper word after the first fix)', async () => {
+    // The first fix (an instruction naming "input" and "arguments" as
+    // wrapper words to avoid) didn't hold: a second real production run
+    // wrapped the answer under "arguments" instead -- literally the other
+    // example word from that same instruction. Unwrapping is now structural
+    // (any single wrapper key, not a specific name) so it isn't a
+    // whack-a-mole fix against whichever word the model reaches for next.
+    const fetchMock = vi.fn().mockResolvedValue(
+      anthropicResponse({
+        content: [{ type: 'tool_use', id: 'toolu_1', name: 'emit_json', input: { arguments: { variants: [{ script: 'hi' }] } } }],
+        stop_reason: 'tool_use',
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await callLovableGateway('k', {
+      model: 'google/gemini-2.5-flash',
+      messages: [{ role: 'user', content: 'give me json' }],
+      response_format: { type: 'json_object' },
+    });
+
+    const data = await result.json();
+    expect(JSON.parse(data.choices[0].message.content)).toEqual({ variants: [{ script: 'hi' }] });
+  });
+
+  it('unwraps double-nested wrapper keys (e.g. "result" around "output" around the real answer)', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      anthropicResponse({
+        content: [{ type: 'tool_use', id: 'toolu_1', name: 'emit_json', input: { result: { output: { variants: [{ script: 'hi' }] } } } }],
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await callLovableGateway('k', {
+      model: 'google/gemini-2.5-flash',
+      messages: [{ role: 'user', content: 'give me json' }],
+      response_format: { type: 'json_object' },
+    });
+
+    const data = await result.json();
+    expect(JSON.parse(data.choices[0].message.content)).toEqual({ variants: [{ script: 'hi' }] });
+  });
+
+  it('does NOT unwrap a correctly-shaped single-key answer whose value is an array (e.g. the real {"variants": [...]} shape)', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      anthropicResponse({
+        content: [{ type: 'tool_use', id: 'toolu_1', name: 'emit_json', input: { variants: [{ script: 'hi' }] } }],
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await callLovableGateway('k', {
+      model: 'google/gemini-2.5-flash',
+      messages: [{ role: 'user', content: 'give me json' }],
+      response_format: { type: 'json_object' },
+    });
+
+    const data = await result.json();
+    expect(JSON.parse(data.choices[0].message.content)).toEqual({ variants: [{ script: 'hi' }] });
+  });
+
   it('does NOT unwrap a correctly-shaped answer that happens to have its own top-level "input" field alongside other fields', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       anthropicResponse({
