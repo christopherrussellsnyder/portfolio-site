@@ -63,17 +63,6 @@ export default {
           dark: "hsl(var(--korex-green-dark))",
           light: "hsl(var(--korex-green-light))",
         },
-        // Legacy compat aliases
-        "korex-red": {
-          DEFAULT: "hsl(var(--korex-green))",
-          dark: "hsl(var(--korex-green-dark))",
-          light: "hsl(var(--korex-green-light))",
-        },
-        "arasaka-red": {
-          DEFAULT: "hsl(var(--korex-green))",
-          dark: "hsl(var(--korex-green-dark))",
-          light: "hsl(var(--korex-green-light))",
-        },
 
         "surface": {
           primary: "hsl(var(--bg-primary))",
@@ -87,13 +76,14 @@ export default {
         "success": "hsl(var(--accent-success))",
         "warning": "hsl(var(--accent-warning))",
         "error": "hsl(var(--accent-error))",
-        // Legacy compat
-        violet: "hsl(var(--violet))",
-        fuchsia: "hsl(var(--fuchsia))",
-        cyan: "hsl(var(--cyan))",
-        emerald: "hsl(var(--emerald))",
-        amber: "hsl(var(--amber))",
-        rose: "hsl(var(--rose))",
+        // NOTE: do not add flat overrides for Tailwind's built-in color
+        // names (violet, fuchsia, cyan, emerald, amber, rose, etc.) here --
+        // a flat string replaces the entire default shade scale for that
+        // name, silently breaking every `bg-emerald-500`, `text-cyan-300`,
+        // `border-amber-500/30` etc. class anywhere in the app (found and
+        // fixed: this exact override existed and had been shadowing the
+        // real emerald/cyan/amber/rose/violet/fuchsia scales used by ~25
+        // components' status badges, rendering them with no color at all).
       },
       borderRadius: {
         lg: "var(--radius)",

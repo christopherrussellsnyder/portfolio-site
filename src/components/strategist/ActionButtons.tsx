@@ -44,22 +44,21 @@ export function ActionButtons({ content, onAction, hasPendingStrategy }: ActionB
     )) {
       actions.push({
         type: 'confirm_strategy',
-        label: '✅ Confirm & Generate Strategy',
+        label: 'Confirm & Generate Strategy',
         icon: <CheckCircle2 className="w-3.5 h-3.5" />,
         action: () => onAction?.('confirm_strategy'),
         variant: 'default',
-        className: 'bg-gradient-to-r from-primary to-arasaka-red-dark hover:shadow-glow text-primary-foreground',
       });
       actions.push({
         type: 'edit_settings',
-        label: '⚙️ Update Settings',
+        label: 'Update Settings',
         icon: <Settings className="w-3.5 h-3.5" />,
         action: () => onAction?.('edit_settings'),
         variant: 'outline',
       });
       actions.push({
         type: 'cancel_strategy',
-        label: '❌ Cancel',
+        label: 'Cancel',
         icon: <XCircle className="w-3.5 h-3.5" />,
         action: () => onAction?.('cancel_strategy'),
         variant: 'outline',

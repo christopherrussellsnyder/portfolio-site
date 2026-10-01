@@ -112,7 +112,7 @@ class ErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryStat
 const LoadingFallback = () => (
   <div className="min-h-screen flex items-center justify-center bg-background text-foreground">
     <div className="text-center">
-      <div className="arasaka-spinner mx-auto mb-4 w-12 h-12"></div>
+      <div className="korex-spinner mx-auto mb-4 w-12 h-12"></div>
       <p className="text-muted-foreground">Loading...</p>
     </div>
   </div>

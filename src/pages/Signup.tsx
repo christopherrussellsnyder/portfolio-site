@@ -96,10 +96,10 @@ export default function Signup() {
             <p className="text-muted-foreground text-sm mb-6">Click the link in the email to activate your account.</p>
             <p className="text-muted-foreground text-xs mb-4">Didn't receive it? Check your spam folder or click below to resend.</p>
             <button onClick={handleResend} disabled={resending || resendCooldown}
-              className="w-full bg-primary text-primary-foreground font-semibold py-3 rounded-lg hover:bg-korex-red-light transition-colors disabled:opacity-50 shadow-glow mb-4">
+              className="w-full bg-primary text-primary-foreground font-semibold py-3 rounded-lg hover:bg-korex-green-dark transition-colors disabled:opacity-50 mb-4">
               {resendCooldown ? 'Email resent!' : resending ? 'Resending...' : 'Resend Verification Email'}
             </button>
-            <Link to="/login" className="text-primary hover:text-korex-red-light font-medium text-sm transition-colors">
+            <Link to="/login" className="text-primary hover:text-korex-green-dark font-medium text-sm transition-colors">
               Back to Login
             </Link>
           </div>
@@ -123,14 +123,14 @@ export default function Signup() {
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-muted-foreground mb-2">Email</label>
               <input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required
-                className="w-full bg-secondary border border-border rounded-lg px-4 py-3 text-foreground placeholder-muted-foreground focus:outline-none focus:border-primary focus:shadow-glow transition-all"
+                className="w-full bg-secondary border border-border rounded-lg px-4 py-3 text-foreground placeholder-muted-foreground focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/15 transition-all"
                 placeholder="you@example.com" />
             </div>
 
             <div>
               <label htmlFor="password" className="block text-sm font-medium text-muted-foreground mb-2">Password</label>
               <input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8}
-                className="w-full bg-secondary border border-border rounded-lg px-4 py-3 text-foreground placeholder-muted-foreground focus:outline-none focus:border-primary focus:shadow-glow transition-all"
+                className="w-full bg-secondary border border-border rounded-lg px-4 py-3 text-foreground placeholder-muted-foreground focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/15 transition-all"
                 placeholder="At least 8 characters with 1 number" />
               {password.length > 0 && (
                 <div className="mt-2">
@@ -147,19 +147,19 @@ export default function Signup() {
             <div>
               <label htmlFor="confirmPassword" className="block text-sm font-medium text-muted-foreground mb-2">Confirm Password</label>
               <input id="confirmPassword" type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required minLength={8}
-                className="w-full bg-secondary border border-border rounded-lg px-4 py-3 text-foreground placeholder-muted-foreground focus:outline-none focus:border-primary focus:shadow-glow transition-all"
+                className="w-full bg-secondary border border-border rounded-lg px-4 py-3 text-foreground placeholder-muted-foreground focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/15 transition-all"
                 placeholder="Confirm your password" />
             </div>
 
             <button type="submit" disabled={loading}
-              className="w-full bg-primary text-primary-foreground font-semibold py-3 rounded-lg hover:bg-korex-red-light transition-colors disabled:opacity-50 shadow-glow">
+              className="w-full bg-primary text-primary-foreground font-semibold py-3 rounded-lg hover:bg-korex-green-dark transition-colors disabled:opacity-50">
               {loading ? 'Creating account...' : 'Create Account'}
             </button>
           </form>
 
           <p className="text-center text-muted-foreground text-sm mt-6">
             Already have an account?{' '}
-            <Link to="/login" className="text-primary hover:text-korex-red-light font-medium transition-colors">Sign in</Link>
+            <Link to="/login" className="text-primary hover:text-korex-green-dark font-medium transition-colors">Sign in</Link>
           </p>
         </div>
       </div>
