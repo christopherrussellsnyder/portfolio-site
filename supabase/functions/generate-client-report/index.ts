@@ -149,7 +149,19 @@ Structure the response as JSON: { "executive_summary": "...", "what_worked": "..
     }
 
     let insights: any = {};
-    try { insights = narrative ? JSON.parse(narrative) : {}; } catch { insights = { executive_summary: narrative }; }
+    try {
+      insights = narrative ? JSON.parse(narrative) : {};
+    } catch {
+      // Previously fell back to `{ executive_summary: narrative }`, which
+      // dumps the raw (malformed/possibly JSON-looking) model text verbatim
+      // into a field the report page renders directly under "Executive
+      // Summary" -- a real risk of garbled text reaching a client-facing
+      // report. ReportView.tsx already renders each narrative section only
+      // when present, so an empty object just omits the AI narrative
+      // section cleanly instead. Logged so a recurrence is diagnosable.
+      console.error(`[client-report] AI narrative was not valid JSON; omitting narrative section. Raw content (first 2000 chars): ${narrative.slice(0, 2000)}`);
+      insights = {};
+    }
 
     const reportTitle = title || `Performance Report — ${period_start} to ${period_end}`;
 
