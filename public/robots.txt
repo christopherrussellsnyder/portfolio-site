@@ -12,14 +12,21 @@ Allow: /
 
 User-agent: *
 Allow: /
-Disallow: /dashboard/
-Disallow: /settings/
-Disallow: /content-ai/
-Disallow: /content-library/
-Disallow: /ai-analytics/
-Disallow: /scheduler/
-Disallow: /campaigns/
-Disallow: /analytics/
-Disallow: /audience/
+Disallow: /ai-strategist
+Disallow: /content-library
+Disallow: /strategies
+Disallow: /insights
+Disallow: /media
+Disallow: /research
+Disallow: /content-generation
+Disallow: /ab-testing
+Disallow: /analytics
+Disallow: /automation
+Disallow: /audience-intelligence
+Disallow: /competitor-monitoring
+Disallow: /settings
+Disallow: /reports
+Disallow: /admin
+Disallow: /accept-workspace-invite
 
 Sitemap: https://korexintelligencesystems.com/sitemap.xml
