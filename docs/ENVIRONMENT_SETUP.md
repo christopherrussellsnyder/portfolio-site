@@ -18,11 +18,27 @@ These are automatically provided by Lovable Cloud:
 | `VITE_SUPABASE_URL` | Supabase project URL |
 | `VITE_SUPABASE_PUBLISHABLE_KEY` | Supabase public key |
 | `VITE_SUPABASE_PROJECT_ID` | Supabase project ID |
-| `LOVABLE_API_KEY` | Lovable AI Gateway key (backend) |
 
 ---
 
 ## 🔑 Backend Secrets (Edge Functions)
+
+### AI Generation (required)
+
+| Secret Name | Required | Where to Get |
+|-------------|----------|--------------|
+| `ANTHROPIC_API_KEY` | Yes | [console.anthropic.com](https://console.anthropic.com) |
+
+**This is not auto-configured and will not appear if you only look at
+Lovable's Cloud → Secrets panel for something Lovable added itself** —
+add it yourself in the same panel. An earlier version of this app ran AI
+through `LOVABLE_API_KEY` / Lovable's AI Gateway; that key only ever
+existed inside Lovable's own execution environment and was never a real,
+independently retrievable Supabase secret, which is why every AI feature
+worked inside Lovable's hosted preview but failed everywhere else
+(`localhost`, a direct `supabase functions deploy`, etc.). The app now
+calls Anthropic's API directly via `supabase/functions/_shared/llm-gateway.ts`
+— `ANTHROPIC_API_KEY` set here is the only thing that key depends on.
 
 Add these in **Cloud → Secrets** for social media integrations:
 
@@ -67,7 +83,7 @@ Add these in **Project Settings → Environment Variables**:
 
 ### Minimum (Works out of box):
 - [x] Supabase - Auto-configured ✅
-- [x] Lovable AI - Auto-configured ✅
+- [ ] Anthropic AI - Add `ANTHROPIC_API_KEY` as a Supabase secret (not auto-configured)
 
 ### For Social Media Posting:
 - [ ] Create Facebook App at developers.facebook.com

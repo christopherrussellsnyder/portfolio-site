@@ -22,8 +22,10 @@ Lovable Cloud automatically handles:
 Add these via Lovable Cloud → Secrets:
 
 ```bash
-# Optional - only if using direct OpenAI
-VITE_OPENAI_API_KEY=sk-proj-xxxxx
+# Required - AI runs directly through Anthropic's API
+# (supabase/functions/_shared/llm-gateway.ts translates every caller's
+# existing OpenAI-shaped request to Anthropic's Messages API)
+ANTHROPIC_API_KEY=sk-ant-xxxxx
 
 # Stripe (for payments)
 STRIPE_SECRET_KEY=sk_test_xxxxx
@@ -67,14 +69,39 @@ ALLOWED_ORIGINS=https://korexintelligencesystems.com,https://www.korexintelligen
 1. Create property at analytics.google.com
 2. Copy Measurement ID to Lovable Secrets
 
-### 4. Custom Domain (Optional)
+### 4. Git Workflow — Production Branch
+
+This repo's production branch (what Lovable builds and publishes from) is
+**`claude/lovable-app-integration-0tpki6`**, not `main` — there is no
+`main` branch. Any change that should go live has to land there via a
+merged pull request. A change sitting on another branch, however
+thoroughly tested, is not deployed and will be silently overwritten the
+next time Lovable rebuilds from the production branch.
+
+Edge function deploys made directly via `supabase functions deploy` from
+a local checkout bypass this (they push straight to the live Supabase
+project regardless of branch), but the frontend build and any
+git-tracked config only ever come from the production branch. Don't rely
+on a local CLI deploy as a substitute for merging — it drifts the two
+apart and the next Lovable rebuild can revert it.
+
+### 5. Email Deliverability
+
+Supabase Auth's built-in email sender is rate-limited (a handful of
+emails/hour) — fine for development, not for real signups. Before
+real users sign up, configure a production SMTP provider (Resend,
+Postmark, SendGrid, etc.) under Supabase → Authentication → Email
+Settings, or signup confirmations and password resets will silently
+stop sending once you're past a handful of users in an hour.
+
+### 6. Custom Domain (Optional)
 
 If deploying to Vercel:
 1. Connect GitHub repository
 2. Add custom domain in Vercel settings
 3. Configure DNS records as shown
 
-### 5. Post-Deployment Checklist
+### 7. Post-Deployment Checklist
 
 - [ ] Test all features in production
 - [ ] Verify payment processing with test cards
@@ -94,9 +121,15 @@ If deploying to Vercel:
 ## Rollback Plan
 
 If issues occur:
-1. Use Lovable's version history to restore previous state
-2. Check error logs in Sentry
-3. Review Edge Function logs in Lovable Cloud
+1. For changes made via git (not Lovable's in-app editor): revert the
+   merge commit on `claude/lovable-app-integration-0tpki6` and push —
+   Lovable rebuilds from whatever that branch's HEAD is.
+2. For changes made via Lovable's in-app editor: use Lovable's version
+   history to restore a previous state.
+3. Check error logs in Sentry.
+4. Review Edge Function logs directly in the Supabase dashboard
+   (Edge Functions → [function] → Logs) — this is the real source of
+   truth for backend errors regardless of which path deployed the code.
 
 ## Support
 
