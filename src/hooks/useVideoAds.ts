@@ -247,8 +247,24 @@ export function useVideoAds() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
+      // Look up the storage path before the row is gone -- once the DB row
+      // is deleted there is no way to find (or ever clean up) the MP4 that
+      // was stored for it, so every delete silently orphaned a file in
+      // Supabase Storage with no recovery path.
+      const cached = queryClient.getQueryData<VideoAdRecord[]>(queryKey);
+      const storagePath = cached?.find((v) => v.id === id)?.storage_path;
+
       const { error } = await supabase.from('video_ads').delete().eq('id', id);
       if (error) throw error;
+
+      if (storagePath) {
+        const { error: storageError } = await supabase.storage.from('video-ads').remove([storagePath]);
+        if (storageError) {
+          // Non-fatal -- the row is already gone and the user's action
+          // succeeded from their point of view; just don't leave this silent.
+          console.error('[video-ads] storage cleanup failed (non-fatal):', storageError.message);
+        }
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey });

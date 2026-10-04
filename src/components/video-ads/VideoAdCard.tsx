@@ -2,6 +2,16 @@ import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Loader2, Play, Trash2, Download, AlertTriangle, Clock } from 'lucide-react';
 import type { VideoAdRecord } from '@/config/video.config';
 
@@ -15,6 +25,10 @@ interface Props {
 export function VideoAdCard({ video, url, onResolveUrl, onDelete }: Props) {
   const [resolved, setResolved] = useState<string | null>(url ?? null);
   const [loadingUrl, setLoadingUrl] = useState(false);
+  // A completed render consumed a quota credit (possibly one of only 2
+  // trial renders) -- a single misclick on the bare trash icon used to
+  // destroy it with no way back. Confirm first.
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   useEffect(() => {
     if (url) setResolved(url);
@@ -148,15 +162,38 @@ export function VideoAdCard({ video, url, onResolveUrl, onDelete }: Props) {
             </Button>
           )}
           <Button
+            aria-label="Delete video"
             size="sm"
             variant="ghost"
             className="h-7 text-xs text-[hsl(var(--text-tertiary))] hover:text-destructive"
-            onClick={() => onDelete(video.id)}
+            onClick={() => setConfirmOpen(true)}
           >
             <Trash2 className="w-3 h-3" />
           </Button>
         </div>
       </CardContent>
+
+      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this video ad?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {video.status === 'completed'
+                ? "This permanently deletes the rendered video and can't be undone. It will still count against the render it already used."
+                : 'This permanently deletes this video ad and can\'t be undone.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => onDelete(video.id)}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 }
