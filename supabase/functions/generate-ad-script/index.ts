@@ -331,10 +331,10 @@ ${customBrief ? `\nAdditional direction from the advertiser:\n${customBrief}` : 
 Write the ${variantCount} script variants, each with its production plan, now.`;
 
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
+    const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
+    if (!ANTHROPIC_API_KEY) throw new Error("ANTHROPIC_API_KEY is not configured");
 
-    const aiRes = await callLovableGateway(LOVABLE_API_KEY, {
+    const aiRes = await callLovableGateway(ANTHROPIC_API_KEY, {
       model: MODEL,
       messages: [
         { role: "system", content: systemPrompt },
@@ -372,6 +372,13 @@ Write the ${variantCount} script variants, each with its production plan, now.`;
 
     const rawVariants = Array.isArray(parsed.variants) ? parsed.variants : [];
     if (!rawVariants.length) {
+      // Was previously silent -- a 200 from the gateway with a "variants"-less
+      // (or truncated/unparseable) payload landed here with no log line at
+      // all, making a real truncation (e.g. the max_tokens default that used
+      // to be too low for this schema) indistinguishable from any other
+      // cause. Log the raw content so a future occurrence is diagnosable
+      // from the first report instead of requiring a guess-and-check loop.
+      console.error(`[ad-script] model returned no usable variants; stop_reason=${aiJson?.choices?.[0]?.finish_reason}; raw content (first 2000 chars): ${String(raw).slice(0, 2000)}`);
       return json({ error: "The script engine returned nothing usable. Please try again." }, 502);
     }
 

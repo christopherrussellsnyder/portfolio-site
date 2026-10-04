@@ -68,8 +68,8 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY missing");
+    const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
+    if (!ANTHROPIC_API_KEY) throw new Error("ANTHROPIC_API_KEY missing");
 
     const supabase = serviceClient();
 
@@ -96,7 +96,7 @@ serve(async (req) => {
 
     for (const { platform, niche } of targets) {
       try {
-        const result = await callAI(LOVABLE_API_KEY, buildPrompt(platform, niche));
+        const result = await callAI(ANTHROPIC_API_KEY, buildPrompt(platform, niche));
         const { error } = await supabase
           .from("campaign_intelligence_signals")
           .upsert({

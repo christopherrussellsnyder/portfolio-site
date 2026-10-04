@@ -117,8 +117,8 @@ Deno.serve(async (req) => {
     // AI narrative
     let narrative = '';
     if (include_ai_narrative) {
-      const lovableKey = Deno.env.get('LOVABLE_API_KEY');
-      if (lovableKey) {
+      const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY');
+      if (anthropicKey) {
         try {
           const prompt = `Write a professional 4-paragraph performance report narrative for a marketing client covering ${period_start} to ${period_end}.
 
@@ -133,7 +133,7 @@ Top posts: ${topPosts.map((p: any) => `"${p.content.slice(0, 80)}" (${p.engageme
 
 Structure the response as JSON: { "executive_summary": "...", "what_worked": "...", "opportunities": "...", "next_steps": "..." }. Keep each section 2-3 sentences, confident and client-facing. No emojis.`;
 
-          const resp = await callLovableGateway(lovableKey, {
+          const resp = await callLovableGateway(anthropicKey, {
             model: 'google/gemini-3-flash-preview',
             messages: [{ role: 'user', content: prompt }],
             response_format: { type: 'json_object' },

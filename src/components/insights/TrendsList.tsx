@@ -1,4 +1,4 @@
-import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { TrendingUp, TrendingDown, Minus, Rocket, ArrowRight, AlertTriangle, BarChart3 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 
@@ -39,15 +39,15 @@ export function TrendsList({
   const getMomentumIcon = () => {
     switch (momentum) {
       case 'Accelerating':
-        return '🚀';
+        return <Rocket className="w-4 h-4" />;
       case 'Steady':
-        return '➡️';
+        return <ArrowRight className="w-4 h-4" />;
       case 'Slowing':
-        return '⚠️';
+        return <AlertTriangle className="w-4 h-4" />;
       case 'Declining':
-        return '📉';
+        return <TrendingDown className="w-4 h-4" />;
       default:
-        return '📊';
+        return <BarChart3 className="w-4 h-4" />;
     }
   };
 
@@ -55,7 +55,7 @@ export function TrendsList({
     <div className="space-y-6">
       {momentum && (
         <div className="flex items-center gap-2 p-3 rounded-lg bg-muted/50">
-          <span className="text-xl">{getMomentumIcon()}</span>
+          <span className="text-primary">{getMomentumIcon()}</span>
           <div>
             <span className="text-sm text-muted-foreground">Growth Momentum:</span>
             <span className="ml-2 font-medium">{momentum}</span>

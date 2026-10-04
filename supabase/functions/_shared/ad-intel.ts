@@ -129,15 +129,15 @@ export async function gatherAdIntel(
       fetchCompetitorAds(supabase, ctx.industry, ctx.competitors, platform, ctx.geoFocus).catch(() => null),
       crawlBusinessSite(supabase, ctx.website).catch(() => null),
       fetchVoiceOfCustomer(supabase, ctx.industry, ctx.products).catch(() => null),
-      supabase.rpc("get_top_performing_posts", { p_user_id: userId, p_platform: platform, p_limit: 5 }).catch(() => ({ data: [] })),
+      Promise.resolve(supabase.rpc("get_top_performing_posts", { p_user_id: userId, p_platform: platform, p_limit: 5 })).catch(() => ({ data: [] })),
       supabase
         .from("content_performance_patterns")
         .select("pattern_type,pattern_value,avg_engagement_rate,post_count")
         .eq("user_id", userId)
         .order("performance_score", { ascending: false })
         .limit(12),
-      supabase.rpc("get_user_baseline_metrics", { p_user_id: userId, p_platform: platform }).catch(() => ({ data: [] })),
-      supabase.rpc("get_top_performing_elements", { p_user_id: userId, p_element_type: "hooks", p_limit: 6 }).catch(() => ({ data: [] })),
+      Promise.resolve(supabase.rpc("get_user_baseline_metrics", { p_user_id: userId, p_platform: platform })).catch(() => ({ data: [] })),
+      Promise.resolve(supabase.rpc("get_top_performing_elements", { p_user_id: userId, p_element_type: "hooks", p_limit: 6 })).catch(() => ({ data: [] })),
       // Creative choices already measured against real outcomes in this niche.
       supabase
         .from("niche_calibration")

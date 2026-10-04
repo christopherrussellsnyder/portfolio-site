@@ -109,11 +109,11 @@ export default function Login() {
                   <label htmlFor="mfa" className="block text-sm font-medium text-muted-foreground mb-2">Authentication code</label>
                   <input id="mfa" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={mfaCode}
                     onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, ''))} required
-                    className="w-full bg-secondary border border-border rounded-lg px-4 py-3 text-foreground tracking-[0.4em] text-center placeholder-muted-foreground focus:outline-none focus:border-primary focus:shadow-glow transition-all"
+                    className="w-full bg-secondary border border-border rounded-lg px-4 py-3 text-foreground tracking-[0.4em] text-center placeholder-muted-foreground focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/15 transition-all"
                     placeholder="123456" />
                 </div>
                 <button type="submit" disabled={loading || mfaCode.length < 6}
-                  className="w-full bg-primary text-primary-foreground font-semibold py-3 rounded-lg hover:bg-korex-red-light transition-colors disabled:opacity-50 shadow-glow">
+                  className="w-full bg-primary text-primary-foreground font-semibold py-3 rounded-lg hover:bg-korex-green-dark transition-colors disabled:opacity-50">
                   {loading ? 'Verifying...' : 'Verify'}
                 </button>
               </form>
@@ -127,22 +127,22 @@ export default function Login() {
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-muted-foreground mb-2">Email</label>
               <input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required
-                className="w-full bg-secondary border border-border rounded-lg px-4 py-3 text-foreground placeholder-muted-foreground focus:outline-none focus:border-primary focus:shadow-glow transition-all"
+                className="w-full bg-secondary border border-border rounded-lg px-4 py-3 text-foreground placeholder-muted-foreground focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/15 transition-all"
                 placeholder="you@example.com" />
             </div>
 
             <div>
               <div className="flex items-center justify-between mb-2">
                 <label htmlFor="password" className="block text-sm font-medium text-muted-foreground">Password</label>
-                <Link to="/forgot-password" className="text-sm text-primary hover:text-korex-red-light transition-colors">Forgot password?</Link>
+                <Link to="/forgot-password" className="text-sm text-primary hover:text-korex-green-dark transition-colors">Forgot password?</Link>
               </div>
               <input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6}
-                className="w-full bg-secondary border border-border rounded-lg px-4 py-3 text-foreground placeholder-muted-foreground focus:outline-none focus:border-primary focus:shadow-glow transition-all"
+                className="w-full bg-secondary border border-border rounded-lg px-4 py-3 text-foreground placeholder-muted-foreground focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/15 transition-all"
                 placeholder="••••••••" />
             </div>
 
             <button type="submit" disabled={loading || (!!lockoutUntil && Date.now() < lockoutUntil)}
-              className="w-full bg-primary text-primary-foreground font-semibold py-3 rounded-lg hover:bg-korex-red-light transition-colors disabled:opacity-50 shadow-glow">
+              className="w-full bg-primary text-primary-foreground font-semibold py-3 rounded-lg hover:bg-korex-green-dark transition-colors disabled:opacity-50">
               {loading ? 'Signing in...' : 'Sign In'}
             </button>
           </form>
@@ -152,7 +152,7 @@ export default function Login() {
 
           <p className="text-center text-muted-foreground text-sm mt-6">
             Don't have an account?{' '}
-            <Link to="/signup" className="text-primary hover:text-korex-red-light font-medium transition-colors">Sign up</Link>
+            <Link to="/signup" className="text-primary hover:text-korex-green-dark font-medium transition-colors">Sign up</Link>
           </p>
         </div>
       </div>

@@ -135,7 +135,7 @@ export function ContextSidebar({
                     <Globe className="w-8 h-8 mx-auto text-muted-foreground/50 mb-2" />
                     <p className="text-sm text-muted-foreground mb-1">No website analyzed</p>
                     <p className="text-xs text-muted-foreground">
-                      Use 🌐 to analyze your website
+                      Use the website analyzer to get started
                     </p>
                   </CardContent>
                 </Card>
@@ -179,7 +179,7 @@ export function ContextSidebar({
                         No analytics uploaded yet
                       </p>
                       <p className="text-xs text-muted-foreground mt-1">
-                        Use 📎 to upload screenshots
+                        Upload a screenshot to get started
                       </p>
                     </div>
                   )}

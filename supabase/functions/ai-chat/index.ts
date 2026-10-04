@@ -545,8 +545,8 @@ serve(async (req) => {
   }
 
   try {
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    if (!LOVABLE_API_KEY) {
+    const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
+    if (!ANTHROPIC_API_KEY) {
       return new Response(JSON.stringify({ error: 'AI service not configured' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
@@ -622,7 +622,7 @@ serve(async (req) => {
     const systemPrompt = buildCognitiveSystemPrompt(fullContext, context_preferences as ContextPreferences, dbConversationHistory.length > 0 ? dbConversationHistory : messages, businessSettings);
     console.log('Cognitive prompt length:', systemPrompt.length);
 
-    const response = await callLovableGateway(LOVABLE_API_KEY, {
+    const response = await callLovableGateway(ANTHROPIC_API_KEY, {
       model: 'google/gemini-3-flash-preview',
       messages: [{ role: 'system', content: systemPrompt }, ...messages],
       stream: true,

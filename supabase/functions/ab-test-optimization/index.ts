@@ -109,10 +109,10 @@ serve(async (req) => {
       const context = buildAIContext(pastTests || [], learningData || [], platform);
 
       // Call AI for recommendations
-      const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+      const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
       
-      if (LOVABLE_API_KEY) {
-        const aiResponse = await callLovableGateway(LOVABLE_API_KEY, {
+      if (ANTHROPIC_API_KEY) {
+        const aiResponse = await callLovableGateway(ANTHROPIC_API_KEY, {
             model: 'google/gemini-3-flash-preview',
             messages: [
               {

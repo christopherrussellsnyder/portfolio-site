@@ -4,7 +4,7 @@ import { checkRateLimit, clientKey } from "../_shared/rate-limit.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { callLovableGateway } from "../_shared/llm-gateway.ts";
 
-const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 
@@ -358,7 +358,7 @@ serve(async (req) => {
       );
     }
 
-    if (!LOVABLE_API_KEY) {
+    if (!ANTHROPIC_API_KEY) {
       return new Response(
         JSON.stringify({ error: 'AI service not configured' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -369,7 +369,7 @@ serve(async (req) => {
     
     const analysisPrompt = buildComprehensivePrompt(scrapedContent);
     
-    const response = await callLovableGateway(LOVABLE_API_KEY, {
+    const response = await callLovableGateway(ANTHROPIC_API_KEY, {
       model: "google/gemini-2.5-flash",
       messages: [
         {

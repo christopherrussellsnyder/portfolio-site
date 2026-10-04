@@ -1,53 +1,413 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { callLovableGateway } from './llm-gateway';
 
+function anthropicResponse(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), { status });
+}
+
 describe('callLovableGateway', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
-  it('POSTs to the Lovable AI Gateway with a bearer auth header and JSON body', async () => {
-    const mockResponse = new Response(JSON.stringify({ ok: true }), { status: 200 });
-    const fetchMock = vi.fn().mockResolvedValue(mockResponse);
+  it('POSTs to the Anthropic Messages API with the right auth headers', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      anthropicResponse({ content: [{ type: 'text', text: 'hi there' }], stop_reason: 'end_turn', usage: { input_tokens: 5, output_tokens: 3 } }),
+    );
     vi.stubGlobal('fetch', fetchMock);
 
-    const result = await callLovableGateway('test-key', {
+    await callLovableGateway('test-key', {
       model: 'google/gemini-2.5-flash',
       messages: [{ role: 'user', content: 'hi' }],
     });
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url, init] = fetchMock.mock.calls[0];
-    expect(url).toBe('https://ai.gateway.lovable.dev/v1/chat/completions');
+    expect(url).toBe('https://api.anthropic.com/v1/messages');
     expect(init.method).toBe('POST');
-    expect(init.headers.Authorization).toBe('Bearer test-key');
+    expect(init.headers['x-api-key']).toBe('test-key');
+    expect(init.headers['anthropic-version']).toBe('2023-06-01');
     expect(init.headers['Content-Type']).toBe('application/json');
-    expect(JSON.parse(init.body)).toEqual({
-      model: 'google/gemini-2.5-flash',
-      messages: [{ role: 'user', content: 'hi' }],
-    });
-    expect(result).toBe(mockResponse);
   });
 
-  it('passes arbitrary extra fields through untouched (e.g. tools, tool_choice)', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }));
+  it('maps known model aliases to a Claude model and extracts the system message', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(anthropicResponse({ content: [{ type: 'text', text: 'ok' }] }));
     vi.stubGlobal('fetch', fetchMock);
 
     await callLovableGateway('k', {
-      model: 'x',
-      messages: [],
-      tools: [{ type: 'function', function: { name: 'f' } }],
-      tool_choice: { type: 'function', function: { name: 'f' } },
+      model: 'google/gemini-3-flash-preview',
+      messages: [
+        { role: 'system', content: 'You are terse.' },
+        { role: 'user', content: 'hi' },
+      ],
+      temperature: 0.7,
+      max_tokens: 500,
     });
 
     const [, init] = fetchMock.mock.calls[0];
     const body = JSON.parse(init.body);
-    expect(body.tools[0].function.name).toBe('f');
-    expect(body.tool_choice.function.name).toBe('f');
+    expect(body.model).toBe('claude-sonnet-5-5');
+    expect(body.system).toBe('You are terse.');
+    expect(body.messages).toEqual([{ role: 'user', content: 'hi' }]);
+    expect(body.max_tokens).toBe(500);
+  });
+
+  it('defaults max_tokens to 16000 (not 4096) when a caller sets none -- 4096 silently truncated generate-ad-script\'s structured output', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(anthropicResponse({ content: [{ type: 'text', text: 'ok' }] }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await callLovableGateway('k', { model: 'google/gemini-2.5-flash', messages: [{ role: 'user', content: 'hi' }] });
+
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.max_tokens).toBe(16000);
+  });
+
+  it('never forwards temperature -- claude-sonnet-5-5 rejects a non-default value while adaptive thinking is on', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(anthropicResponse({ content: [{ type: 'text', text: 'ok' }] }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await callLovableGateway('k', {
+      model: 'google/gemini-3-flash-preview',
+      messages: [{ role: 'user', content: 'hi' }],
+      temperature: 0.7,
+    });
+
+    const [, init] = fetchMock.mock.calls[0];
+    const body = JSON.parse(init.body);
+    expect(body).not.toHaveProperty('temperature');
+  });
+
+  it('always requests low effort to keep multi-call chains (e.g. generate-strategy) inside the function timeout', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(anthropicResponse({ content: [{ type: 'text', text: 'ok' }] }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await callLovableGateway('k', { model: 'google/gemini-3-flash-preview', messages: [{ role: 'user', content: 'hi' }] });
+
+    const [, init] = fetchMock.mock.calls[0];
+    const body = JSON.parse(init.body);
+    expect(body.output_config).toEqual({ effort: 'low' });
+  });
+
+  it('falls back to claude-haiku-4-5 for the cheap-tier alias and claude-sonnet-5-5 for an unknown model', async () => {
+    const fetchMock = vi.fn(() => Promise.resolve(anthropicResponse({ content: [{ type: 'text', text: 'ok' }] })));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await callLovableGateway('k', { model: 'google/gemini-2.5-flash-lite', messages: [] });
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).model).toBe('claude-haiku-4-5');
+
+    await callLovableGateway('k', { model: 'some-unmapped-model', messages: [] });
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body).model).toBe('claude-sonnet-5-5');
+  });
+
+  it('routes a JSON-mode request through an auto-choice emit_json tool call (forced tool_choice 400s on this gateway\'s models) and returns its input as choices[0].message.content', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      anthropicResponse({
+        content: [{ type: 'tool_use', id: 'toolu_1', name: 'emit_json', input: { a: 1 } }],
+        stop_reason: 'tool_use',
+        usage: { input_tokens: 10, output_tokens: 4 },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await callLovableGateway('k', {
+      model: 'google/gemini-2.5-flash',
+      messages: [{ role: 'user', content: 'give me json' }],
+      response_format: { type: 'json_object' },
+    });
+
+    const sentBody = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(sentBody.tools).toEqual([
+      {
+        name: 'emit_json',
+        description: 'Return the requested output as a single JSON object matching the structure described above.',
+        input_schema: { type: 'object' },
+      },
+    ]);
+    // NOT { type: 'tool', name: 'emit_json' } -- claude-sonnet-5-5 and
+    // claude-opus-5-5 both reject a forced tool_choice with a 400, so this
+    // has to stay "auto" with the tool steered from a system instruction.
+    expect(sentBody.tool_choice).toEqual({ type: 'auto' });
+    expect(sentBody.system).toContain('You must call the "emit_json" tool');
+
+    const data = await result.json();
+    expect(data.choices[0].message.content).toBe('{"a":1}');
+    expect(data.usage.prompt_tokens).toBe(10);
+    expect(data.usage.completion_tokens).toBe(4);
+  });
+
+  it('unwraps a real-world emit_json call that nested the answer under a sole "input" key (reproduces the actual generate-ad-script failure)', async () => {
+    // A real production log showed the model calling emit_json correctly
+    // but, with no declared properties on its permissive schema to anchor
+    // it, nesting the real answer one level deeper: {"input": {"variants":
+    // [...]}} instead of {"variants": [...]}. generate-ad-script's
+    // JSON.parse(content).variants then came up undefined -- a 200 with a
+    // tool_use block, but the caller's empty-result branch had no logging,
+    // so it looked identical to the model returning nothing.
+    const fetchMock = vi.fn().mockResolvedValue(
+      anthropicResponse({
+        content: [{ type: 'tool_use', id: 'toolu_1', name: 'emit_json', input: { input: { variants: [{ script: 'hi' }] } } }],
+        stop_reason: 'tool_use',
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await callLovableGateway('k', {
+      model: 'google/gemini-2.5-flash',
+      messages: [{ role: 'user', content: 'give me json' }],
+      response_format: { type: 'json_object' },
+    });
+
+    const data = await result.json();
+    const parsed = JSON.parse(data.choices[0].message.content);
+    expect(parsed).toEqual({ variants: [{ script: 'hi' }] });
+  });
+
+  it('unwraps a real-world emit_json call that nested the answer under "arguments" instead (the SAME bug recurred with a different wrapper word after the first fix)', async () => {
+    // The first fix (an instruction naming "input" and "arguments" as
+    // wrapper words to avoid) didn't hold: a second real production run
+    // wrapped the answer under "arguments" instead -- literally the other
+    // example word from that same instruction. Unwrapping is now structural
+    // (any single wrapper key, not a specific name) so it isn't a
+    // whack-a-mole fix against whichever word the model reaches for next.
+    const fetchMock = vi.fn().mockResolvedValue(
+      anthropicResponse({
+        content: [{ type: 'tool_use', id: 'toolu_1', name: 'emit_json', input: { arguments: { variants: [{ script: 'hi' }] } } }],
+        stop_reason: 'tool_use',
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await callLovableGateway('k', {
+      model: 'google/gemini-2.5-flash',
+      messages: [{ role: 'user', content: 'give me json' }],
+      response_format: { type: 'json_object' },
+    });
+
+    const data = await result.json();
+    expect(JSON.parse(data.choices[0].message.content)).toEqual({ variants: [{ script: 'hi' }] });
+  });
+
+  it('unwraps double-nested wrapper keys (e.g. "result" around "output" around the real answer)', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      anthropicResponse({
+        content: [{ type: 'tool_use', id: 'toolu_1', name: 'emit_json', input: { result: { output: { variants: [{ script: 'hi' }] } } } }],
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await callLovableGateway('k', {
+      model: 'google/gemini-2.5-flash',
+      messages: [{ role: 'user', content: 'give me json' }],
+      response_format: { type: 'json_object' },
+    });
+
+    const data = await result.json();
+    expect(JSON.parse(data.choices[0].message.content)).toEqual({ variants: [{ script: 'hi' }] });
+  });
+
+  it('does NOT unwrap a correctly-shaped single-key answer whose value is an array (e.g. the real {"variants": [...]} shape)', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      anthropicResponse({
+        content: [{ type: 'tool_use', id: 'toolu_1', name: 'emit_json', input: { variants: [{ script: 'hi' }] } }],
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await callLovableGateway('k', {
+      model: 'google/gemini-2.5-flash',
+      messages: [{ role: 'user', content: 'give me json' }],
+      response_format: { type: 'json_object' },
+    });
+
+    const data = await result.json();
+    expect(JSON.parse(data.choices[0].message.content)).toEqual({ variants: [{ script: 'hi' }] });
+  });
+
+  it('does NOT unwrap a correctly-shaped answer that happens to have its own top-level "input" field alongside other fields', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      anthropicResponse({
+        content: [{ type: 'tool_use', id: 'toolu_1', name: 'emit_json', input: { input: 'user typed this', other: 1 } }],
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await callLovableGateway('k', {
+      model: 'google/gemini-2.5-flash',
+      messages: [{ role: 'user', content: 'give me json' }],
+      response_format: { type: 'json_object' },
+    });
+
+    const data = await result.json();
+    expect(JSON.parse(data.choices[0].message.content)).toEqual({ input: 'user typed this', other: 1 });
+  });
+
+  it('does not route json_object mode through the emit_json tool when the caller already passed explicit tools', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      anthropicResponse({ content: [{ type: 'tool_use', id: 'toolu_1', name: 'provide_recommendations', input: { x: 1 } }] }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await callLovableGateway('k', {
+      model: 'google/gemini-2.5-flash',
+      messages: [{ role: 'user', content: 'go' }],
+      response_format: { type: 'json_object' },
+      tools: [{ type: 'function', function: { name: 'provide_recommendations', parameters: { type: 'object' } } }],
+      tool_choice: { type: 'function', function: { name: 'provide_recommendations' } },
+    });
+
+    const sentBody = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(sentBody.tools).toEqual([
+      { name: 'provide_recommendations', description: '', input_schema: { type: 'object' } },
+    ]);
+    // Same forced-tool_choice downgrade applies to explicit-tools callers.
+    expect(sentBody.tool_choice).toEqual({ type: 'auto' });
+    expect(sentBody.system).toContain('You must call the "provide_recommendations" tool');
+  });
+
+  it('falls back to escaping raw control characters in free text if json_object mode returns text instead of a tool_use block', async () => {
+    // tool_choice can only be "auto" here (see above), so the model
+    // ignoring the steering instruction and answering in free text is a
+    // real path, not just a max_tokens edge case -- sanitize it too.
+    const brokenJson = '{"variants":[{"script":"Line one\nLine two"}]}';
+    expect(() => JSON.parse(brokenJson)).toThrow();
+
+    const fetchMock = vi.fn().mockResolvedValue(anthropicResponse({ content: [{ type: 'text', text: brokenJson }] }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await callLovableGateway('k', {
+      model: 'google/gemini-2.5-flash',
+      messages: [{ role: 'user', content: 'write a script' }],
+      response_format: { type: 'json_object' },
+    });
+
+    const data = await result.json();
+    const parsed = JSON.parse(data.choices[0].message.content);
+    expect(parsed.variants[0].script).toBe('Line one\nLine two');
+  });
+
+  it('does NOT touch raw newlines outside json_object mode (e.g. plain chat content)', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(anthropicResponse({ content: [{ type: 'text', text: 'Line one\nLine two' }] }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await callLovableGateway('k', {
+      model: 'google/gemini-2.5-flash',
+      messages: [{ role: 'user', content: 'hi' }],
+    });
+
+    const data = await result.json();
+    expect(data.choices[0].message.content).toBe('Line one\nLine two');
+  });
+
+  it('translates image_url content parts (base64 image and PDF) into Anthropic image/document blocks', async () => {
+    const fetchMock = vi.fn(() => Promise.resolve(anthropicResponse({ content: [{ type: 'text', text: 'ok' }] })));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await callLovableGateway('k', {
+      model: 'google/gemini-2.5-flash',
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: 'describe' },
+            { type: 'image_url', image_url: { url: 'data:image/png;base64,QUJD' } },
+          ],
+        },
+      ],
+    });
+    const imgBody = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(imgBody.messages[0].content[1]).toEqual({
+      type: 'image',
+      source: { type: 'base64', media_type: 'image/png', data: 'QUJD' },
+    });
+
+    await callLovableGateway('k', {
+      model: 'google/gemini-2.5-flash',
+      messages: [
+        {
+          role: 'user',
+          content: [{ type: 'image_url', image_url: { url: 'data:application/pdf;base64,WFla' } }],
+        },
+      ],
+    });
+    const pdfBody = JSON.parse(fetchMock.mock.calls[1][1].body);
+    expect(pdfBody.messages[0].content[0]).toEqual({
+      type: 'document',
+      source: { type: 'base64', media_type: 'application/pdf', data: 'WFla' },
+    });
+  });
+
+  it('downgrades an OpenAI-style forced tool_choice to auto + a steering instruction, and still translates the resulting tool_use into a stringified arguments field', async () => {
+    // Anthropic returns a 400 for a forced tool_choice on claude-sonnet-5-5 /
+    // claude-opus-5-5 ("tool_choice: type \"tool\" and \"any\" are not
+    // supported for this model") -- this reproduces the real
+    // ab-test-optimization failure. The gateway has to send "auto" and
+    // steer via the system prompt instead of forwarding the forced choice.
+    const fetchMock = vi.fn().mockResolvedValue(
+      anthropicResponse({
+        content: [{ type: 'tool_use', id: 'toolu_1', name: 'provide_recommendations', input: { x: 1 } }],
+        stop_reason: 'tool_use',
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await callLovableGateway('k', {
+      model: 'google/gemini-2.5-flash',
+      messages: [{ role: 'user', content: 'go' }],
+      tools: [{ type: 'function', function: { name: 'provide_recommendations', parameters: { type: 'object' } } }],
+      tool_choice: { type: 'function', function: { name: 'provide_recommendations' } },
+    });
+
+    const sentBody = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(sentBody.tools).toEqual([
+      { name: 'provide_recommendations', description: '', input_schema: { type: 'object' } },
+    ]);
+    expect(sentBody.tool_choice).toEqual({ type: 'auto' });
+    expect(sentBody.system).toContain('You must call the "provide_recommendations" tool');
+
+    const data = await result.json();
+    const toolCall = data.choices[0].message.tool_calls[0];
+    expect(toolCall.function.name).toBe('provide_recommendations');
+    expect(JSON.parse(toolCall.function.arguments)).toEqual({ x: 1 });
+  });
+
+  it('preserves a non-2xx status (e.g. 429) so callers status-code branches still fire', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('{"error":"rate limited"}', { status: 429 })));
+    const result = await callLovableGateway('k', { model: 'x', messages: [] });
+    expect(result.status).toBe(429);
+    expect(result.ok).toBe(false);
   });
 
   it('does not swallow a rejected fetch — errors propagate to the caller', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network down')));
     await expect(callLovableGateway('k', { model: 'x', messages: [] })).rejects.toThrow('network down');
+  });
+
+  it('translates a streaming Anthropic SSE response into OpenAI-style delta chunks ending in [DONE]', async () => {
+    const anthropicSse =
+      'event: content_block_delta\ndata: {"type":"content_block_delta","delta":{"type":"text_delta","text":"Hel"}}\n\n' +
+      'event: content_block_delta\ndata: {"type":"content_block_delta","delta":{"type":"text_delta","text":"lo"}}\n\n' +
+      'event: message_stop\ndata: {"type":"message_stop"}\n\n';
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(anthropicSse));
+        controller.close();
+      },
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(new Response(stream, { status: 200 })),
+    );
+
+    const result = await callLovableGateway('k', {
+      model: 'google/gemini-3-flash-preview',
+      messages: [{ role: 'user', content: 'hi' }],
+      stream: true,
+    });
+
+    expect(result.headers.get('Content-Type')).toBe('text/event-stream');
+    const text = await result.text();
+    expect(text).toContain('"content":"Hel"');
+    expect(text).toContain('"content":"lo"');
+    expect(text.trim().endsWith('data: [DONE]')).toBe(true);
   });
 });

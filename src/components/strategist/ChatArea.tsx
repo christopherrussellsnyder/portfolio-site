@@ -211,7 +211,7 @@ export function ChatArea({
     setMessages(prev => [...prev, {
       id: progressMsgId,
       role: 'assistant',
-      content: `🚀 **Generating your ${duration}-day ${modeLabel} ${platform} strategy...**\n\nThis will take 60-90 seconds for a comprehensive multi-platform plan.\n\n⏳ Analyzing business context...`,
+      content: `**Generating your ${duration}-day ${modeLabel} ${platform} strategy...**\n\nThis will take 60-90 seconds for a comprehensive multi-platform plan.\n\nAnalyzing business context...`,
       createdAt: new Date(),
     }]);
 
@@ -219,7 +219,7 @@ export function ChatArea({
       const result = await generateStrategy(platform, duration, undefined, undefined, currentConversationId, contentMode);
       if (result) {
         setHasStrategies(true);
-        const successContent = `✨ **Strategy Generated Successfully!**\n\nI've created your ${duration}-day ${modeLabel} ${platform} content strategy with **${result.postsCount} posts**.\n\n**Predicted Results:**\n- 📈 Total Reach: ${result.strategy.predicted_metrics?.total_reach?.toLocaleString() || 'N/A'}\n- 💬 Avg Engagement: ${result.strategy.predicted_metrics?.avg_engagement_rate || 'N/A'}%\n- 👥 Follower Growth: +${result.strategy.predicted_metrics?.expected_follower_growth || 'N/A'}\n\n[View Full Strategy](/strategies/${result.strategyId})`;
+        const successContent = `**Strategy Generated Successfully**\n\nI've created your ${duration}-day ${modeLabel} ${platform} content strategy with **${result.postsCount} posts**.\n\n**Predicted Results:**\n- Total Reach: ${result.strategy.predicted_metrics?.total_reach?.toLocaleString() || 'N/A'}\n- Avg Engagement: ${result.strategy.predicted_metrics?.avg_engagement_rate || 'N/A'}%\n- Follower Growth: +${result.strategy.predicted_metrics?.expected_follower_growth || 'N/A'}\n\n[View Full Strategy](/strategies/${result.strategyId})`;
 
         setMessages(prev => prev.map(m =>
           m.id === progressMsgId ? { ...m, content: successContent } : m
@@ -231,7 +231,7 @@ export function ChatArea({
       } else {
         setMessages(prev => prev.map(m =>
           m.id === progressMsgId
-            ? { ...m, content: '❌ **Strategy generation failed.** Please try again or use a shorter duration (14 days) for better reliability.' }
+            ? { ...m, content: '**Strategy generation failed.** Please try again or use a shorter duration (14 days) for better reliability.' }
             : m
         ));
       }
@@ -239,7 +239,7 @@ export function ChatArea({
       console.error('Strategy generation error:', error);
       setMessages(prev => prev.map(m =>
         m.id === progressMsgId
-          ? { ...m, content: `❌ **Strategy generation failed:** ${error instanceof Error ? error.message : 'Unknown error'}\n\nTry generating via chat by typing "Generate a ${duration}-day ${platform} strategy".` }
+          ? { ...m, content: `**Strategy generation failed:** ${error instanceof Error ? error.message : 'Unknown error'}\n\nTry generating via chat by typing "Generate a ${duration}-day ${platform} strategy".` }
           : m
       ));
     }
@@ -287,7 +287,7 @@ export function ChatArea({
       const cancelMsg: Message = {
         id: `cancel-${Date.now()}`,
         role: 'assistant',
-        content: '✅ Strategy generation cancelled. You can request a new strategy anytime by clicking the strategy button or asking me.',
+        content: 'Strategy generation cancelled. You can request a new strategy anytime by clicking the strategy button or asking me.',
         createdAt: new Date(),
       };
       setMessages(prev => [...prev, cancelMsg]);
@@ -503,30 +503,30 @@ export function ChatArea({
     // Show single processing message that updates in-place
     const processingId = `analysis-${Date.now()}`;
     const progressStages = [
-      '📤 Uploading file...',
-      '🔍 Processing image...',
-      '📊 Extracting metrics...',
-      '🧠 Running performance analysis...',
-      '💡 Generating actionable insights...',
+      'Uploading file...',
+      'Processing image...',
+      'Extracting metrics...',
+      'Running performance analysis...',
+      'Generating actionable insights...',
     ];
-    
+
     let stageIdx = 0;
     setMessages(prev => [...prev, {
       id: processingId,
       role: 'assistant',
-      content: `⏳ **Analyzing your analytics ${label}...**\n\n${progressStages[0]}\n\n_Estimated: 30-45 seconds_`,
+      content: `**Analyzing your analytics ${label}...**\n\n${progressStages[0]}\n\n_Estimated: 30-45 seconds_`,
       createdAt: new Date(),
     }]);
 
     // Cycle through progress stages
     const stageInterval = setInterval(() => {
       stageIdx = Math.min(stageIdx + 1, progressStages.length - 1);
-      const progress = progressStages.slice(0, stageIdx + 1).map((s, i) => 
-        i < stageIdx ? `✅ ${s.slice(2)}` : s
+      const progress = progressStages.slice(0, stageIdx + 1).map((s, i) =>
+        i < stageIdx ? `✓ ${s}` : s
       ).join('\n');
-      setMessages(prev => prev.map(m => 
-        m.id === processingId 
-          ? { ...m, content: `⏳ **Analyzing your analytics ${label}...**\n\n${progress}\n\n_Processing..._` }
+      setMessages(prev => prev.map(m =>
+        m.id === processingId
+          ? { ...m, content: `**Analyzing your analytics ${label}...**\n\n${progress}\n\n_Processing..._` }
           : m
       ));
     }, 5000);
@@ -540,7 +540,7 @@ export function ChatArea({
         let finalContent = result.analysis;
         
         // Add quick action buttons as markdown
-        finalContent += `\n\n---\n\n**📋 Next Steps:**\n- 🚀 Ask me to "Generate a strategy based on this data"\n- 📊 Upload another file to compare periods\n- 💬 Ask any question about these insights\n\n<sub>_These insights are based on your current business profile. Need to update? Click ⚙️ Settings in the top right._</sub>`;
+        finalContent += `\n\n---\n\n**Next Steps:**\n- Ask me to "Generate a strategy based on this data"\n- Upload another file to compare periods\n- Ask any question about these insights\n\n<sub>_These insights are based on your current business profile. Need to update? Click Settings in the top right._</sub>`;
 
         // Transform processing message into final result (in-place update)
         setMessages(prev => prev.map(m => 
@@ -554,7 +554,7 @@ export function ChatArea({
         // Analysis returned no result
         setMessages(prev => prev.map(m => 
           m.id === processingId 
-            ? { ...m, content: '❌ Analysis could not extract meaningful data from this file. Please try:\n1. A clearer screenshot\n2. Exporting as CSV from your platform\n3. A different file format' }
+            ? { ...m, content: 'Analysis could not extract meaningful data from this file. Please try:\n1. A clearer screenshot\n2. Exporting as CSV from your platform\n3. A different file format' }
             : m
         ));
       }
@@ -564,7 +564,7 @@ export function ChatArea({
       console.error('Analysis error:', error);
       setMessages(prev => prev.map(m => 
         m.id === processingId 
-          ? { ...m, content: `❌ **Analysis Failed**\n\n${error instanceof Error ? error.message : 'An error occurred'}\n\nPlease try uploading again or use a different file format.` }
+          ? { ...m, content: `**Analysis Failed**\n\n${error instanceof Error ? error.message : 'An error occurred'}\n\nPlease try uploading again or use a different file format.` }
           : m
       ));
     } finally {
@@ -600,10 +600,10 @@ I'll use this context to provide personalized marketing recommendations. You can
     setMessages(prev => [...prev, {
       id: `user-${Date.now()}`,
       role: 'user',
-      content: '🌐 Analyzed my website',
+      content: 'Analyzed my website',
       createdAt: new Date(),
     }]);
-    await saveMessage(convId, 'user', '🌐 Analyzed my website');
+    await saveMessage(convId, 'user', 'Analyzed my website');
 
     setMessages(prev => [...prev, {
       id: `assistant-${Date.now()}`,
@@ -657,7 +657,7 @@ I'll use this context to provide personalized marketing recommendations. You can
           const cancelMsg: Message = {
             id: `cancel-${Date.now()}`,
             role: 'assistant',
-            content: '✅ Strategy generation cancelled. You can request a new strategy anytime.',
+            content: 'Strategy generation cancelled. You can request a new strategy anytime.',
             createdAt: new Date(),
           };
           setMessages(prev => [...prev, cancelMsg]);
@@ -701,7 +701,7 @@ I'll use this context to provide personalized marketing recommendations. You can
     <div className={cn('flex flex-col h-full bg-background', className)}>
       {/* Settings incomplete banner */}
       {!settingsComplete && (
-        <div className="mx-4 mt-3 bg-gradient-to-r from-primary/10 to-korex-red-dark/10 border border-primary/30 rounded-lg p-4 flex items-center justify-between gap-3">
+        <div className="mx-4 mt-3 bg-primary/10 border border-primary/30 rounded-lg p-4 flex items-center justify-between gap-3">
           <p className="text-sm text-muted-foreground">
             <span className="text-foreground font-medium">Recommendation:</span> Complete your business settings for more accurate strategies.
           </p>
@@ -744,7 +744,7 @@ I'll use this context to provide personalized marketing recommendations. You can
                 className="group p-5 rounded-2xl border border-subtle bg-secondary/50 backdrop-blur-sm hover:border-primary/30 hover:bg-secondary/80 transition-all duration-300 text-left"
                 onClick={() => setShowWebsiteAnalyzer(true)}
               >
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center mb-3 group-hover:shadow-glow transition-shadow duration-300">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center mb-3 group-hover:bg-primary/10 transition-colors duration-300">
                   <Globe className="w-5 h-5 text-primary" />
                 </div>
                 <h3 className="font-semibold text-sm mb-1">Analyze Website</h3>
@@ -757,7 +757,7 @@ I'll use this context to provide personalized marketing recommendations. You can
                 className="group p-5 rounded-2xl border border-subtle bg-secondary/50 backdrop-blur-sm hover:border-primary/30 hover:bg-secondary/80 transition-all duration-300 text-left"
                 onClick={() => setShowUploader(true)}
               >
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center mb-3 group-hover:shadow-glow transition-shadow duration-300">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center mb-3 group-hover:bg-primary/10 transition-colors duration-300">
                   <ImagePlus className="w-5 h-5 text-primary" />
                 </div>
                 <h3 className="font-semibold text-sm mb-1">Upload Analytics</h3>
@@ -770,7 +770,7 @@ I'll use this context to provide personalized marketing recommendations. You can
                 className="group p-5 rounded-2xl border border-subtle bg-secondary/50 backdrop-blur-sm hover:border-primary/30 hover:bg-secondary/80 transition-all duration-300 text-left"
                 onClick={() => setShowStrategyDialog(true)}
               >
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center mb-3 group-hover:shadow-glow transition-shadow duration-300">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center mb-3 group-hover:bg-primary/10 transition-colors duration-300">
                   <Lightbulb className="w-5 h-5 text-primary" />
                 </div>
                 <h3 className="font-semibold text-sm mb-1">Generate Strategy</h3>
@@ -850,7 +850,7 @@ I'll use this context to provide personalized marketing recommendations. You can
           {pendingStrategy && (
             <div className="mb-2 px-3 py-2 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-between text-xs">
               <span className="text-muted-foreground">
-                ⏳ <span className="text-foreground font-medium">Strategy confirmation pending</span> — {pendingStrategy.duration}-day {pendingStrategy.platform} plan
+                <span className="text-foreground font-medium">Strategy confirmation pending</span> — {pendingStrategy.duration}-day {pendingStrategy.platform} plan
               </span>
               <button 
                 className="text-primary hover:text-primary/80 font-medium"
@@ -859,7 +859,7 @@ I'll use this context to provide personalized marketing recommendations. You can
                   const cancelMsg: Message = {
                     id: `cancel-${Date.now()}`,
                     role: 'assistant',
-                    content: '✅ Strategy generation cancelled.',
+                    content: 'Strategy generation cancelled.',
                     createdAt: new Date(),
                   };
                   setMessages(prev => [...prev, cancelMsg]);
@@ -870,7 +870,7 @@ I'll use this context to provide personalized marketing recommendations. You can
             </div>
           )}
           {/* Main input container - pill-like design */}
-          <div className="relative flex items-end gap-2 p-2 rounded-2xl bg-secondary/60 border border-subtle focus-within:border-primary/40 focus-within:shadow-glow transition-all duration-300">
+          <div className="relative flex items-end gap-2 p-2 rounded-2xl bg-secondary/60 border border-subtle focus-within:border-primary/40 focus-within:ring-2 focus-within:ring-primary/15 transition-all duration-300">
             {/* Quick action buttons inline */}
             <div className="flex items-center gap-1 pl-1 pb-1">
               <QuickActions
@@ -955,7 +955,7 @@ I'll use this context to provide personalized marketing recommendations. You can
                 disabled={!input.trim() || isDisabled}
                 aria-label="Send message"
                 size="icon"
-                className="h-9 w-9 rounded-xl flex-shrink-0 bg-gradient-to-br from-primary to-arasaka-red-dark hover:shadow-glow transition-all duration-300"
+                className="h-9 w-9 rounded-xl flex-shrink-0 bg-primary hover:bg-korex-green-dark transition-colors duration-200"
               >
                 {isLoading ? (
                   <Loader2 className="w-4 h-4 animate-spin" />

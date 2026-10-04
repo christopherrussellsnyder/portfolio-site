@@ -182,6 +182,11 @@ Deno.serve(async (req) => {
     const gate = await requirePro(req);
     if (gate instanceof Response) return gate;
 
+    // Two separate providers: LOVABLE_API_KEY is required -- it authenticates
+    // the actual image-generation call below (Claude has no image model, so
+    // this stays on Lovable's image gateway). ANTHROPIC_API_KEY is optional --
+    // it only powers the brief-enhancement text step, which already fails
+    // soft to the raw prompt on any error (see enhanceBrief).
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
       return new Response(JSON.stringify({ error: "LOVABLE_API_KEY not configured" }), {
@@ -189,6 +194,7 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+    const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
 
     // Auth: get user from JWT
     const authHeader = req.headers.get("Authorization") || "";
@@ -241,8 +247,8 @@ Deno.serve(async (req) => {
     // Keep structured, labeled strategy briefs intact. The enhancer is useful
     // for short ideas, but compressing a complete production brief can discard
     // required layout, product, copy, or CTA instructions.
-    const prompt = enhance && basePrompt.length < 1400
-      ? await enhanceBrief(basePrompt, LOVABLE_API_KEY)
+    const prompt = enhance && basePrompt.length < 1400 && ANTHROPIC_API_KEY
+      ? await enhanceBrief(basePrompt, ANTHROPIC_API_KEY)
       : basePrompt;
 
     // Body shape depends on the vendor: OpenAI image models take `prompt`,

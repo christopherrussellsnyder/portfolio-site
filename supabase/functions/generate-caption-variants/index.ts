@@ -38,8 +38,8 @@ serve(async (req) => {
       );
     }
 
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    if (!LOVABLE_API_KEY) throw new Error('LOVABLE_API_KEY is not configured');
+    const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
+    if (!ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY is not configured');
 
     const admin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
@@ -122,7 +122,7 @@ ${groundingBlock}
 
 Generate ${CANDIDATE_POOL} distinct candidates now.`;
 
-    const response = await callLovableGateway(LOVABLE_API_KEY, {
+    const response = await callLovableGateway(ANTHROPIC_API_KEY, {
       model: 'google/gemini-2.5-flash',
       messages: [
         { role: 'system', content: systemPrompt },

@@ -55,10 +55,10 @@ function getFileIcon(fileType: AnalyticsFileType) {
 
 function getFileTypeBadge(fileType: AnalyticsFileType) {
   switch (fileType) {
-    case 'image': return '📸 Image';
-    case 'pdf': return '📄 PDF';
-    case 'csv': return '📊 CSV';
-    case 'excel': return '📊 Excel';
+    case 'image': return 'Image';
+    case 'pdf': return 'PDF';
+    case 'csv': return 'CSV';
+    case 'excel': return 'Excel';
   }
 }
 
@@ -209,7 +209,7 @@ export function ScreenshotUploader({
                 Drop analytics file here
               </p>
               <p className="text-xs text-muted-foreground mt-1">
-                📸 Images (10MB) · 📄 PDF · 📊 Excel/CSV (25MB)
+                Images (10MB) · PDF · Excel/CSV (25MB)
               </p>
             </div>
           </div>
@@ -268,7 +268,7 @@ export function ScreenshotUploader({
                 {uploadedFile.fileType === 'image' ? <Image className="w-4 h-4 mr-2" /> :
                  uploadedFile.fileType === 'pdf' ? <FileText className="w-4 h-4 mr-2" /> :
                  <FileSpreadsheet className="w-4 h-4 mr-2" />}
-                Analyze {getFileTypeBadge(uploadedFile.fileType).split(' ')[1]}
+                Analyze {getFileTypeBadge(uploadedFile.fileType)}
               </Button>
             </div>
           )}

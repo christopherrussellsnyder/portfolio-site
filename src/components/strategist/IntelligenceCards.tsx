@@ -4,7 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { Brain, TrendingUp, Target, Zap, ChevronDown, ChevronUp } from 'lucide-react';
+import { Brain, TrendingUp, TrendingDown, Target, Zap, Flame, ArrowRight, ChevronDown, ChevronUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar,
@@ -99,9 +99,9 @@ export function IntelligenceCards() {
   }));
 
   const trendIcon = (type: string) => {
-    if (type === 'rising' || type === 'viral') return '🔥';
-    if (type === 'declining') return '📉';
-    return '➡️';
+    if (type === 'rising' || type === 'viral') return <Flame className="w-3.5 h-3.5 text-orange-500" />;
+    if (type === 'declining') return <TrendingDown className="w-3.5 h-3.5 text-destructive" />;
+    return <ArrowRight className="w-3.5 h-3.5 text-muted-foreground" />;
   };
 
   return (

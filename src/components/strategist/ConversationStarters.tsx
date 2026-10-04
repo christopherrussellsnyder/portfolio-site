@@ -51,7 +51,7 @@ const starterCategories: StarterCategory[] = [
   {
     name: 'Learning',
     icon: <HelpCircle className="w-5 h-5" />,
-    gradient: 'from-primary/15 to-arasaka-red-light/10',
+    gradient: 'from-primary/15 to-korex-green-light/10',
     prompts: [
       "How does the Instagram algorithm work?",
       "Best practices for hashtags",
