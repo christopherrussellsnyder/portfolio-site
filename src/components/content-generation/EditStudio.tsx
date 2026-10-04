@@ -21,11 +21,13 @@ import {
   HelpCircle,
   Layout,
   Lightbulb,
+  Loader2,
   Scissors,
   Sparkles,
 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { EvidenceBasisBadge } from '@/components/DataSourceBadge';
+import { burnCaptions, type BurnStage } from '@/lib/captionBurner';
 import {
   CAMERA_LABELS,
   COMPOSITION_LABELS,
@@ -121,6 +123,9 @@ export function EditStudio({
 }: Props) {
   const [sourceId, setSourceId] = useState<string>('');
   const [copied, setCopied] = useState(false);
+  const [burning, setBurning] = useState(false);
+  const [burnStage, setBurnStage] = useState<BurnStage | null>(null);
+  const [burnProgress, setBurnProgress] = useState(0);
   // Open by default for first-timers, collapsed once they've been here before.
   const [guideOpen, setGuideOpen] = useState<boolean>(() => {
     try {
@@ -216,6 +221,41 @@ export function EditStudio({
     a.download = filename;
     a.click();
     URL.revokeObjectURL(a.href);
+  };
+
+  const handleBurnCaptions = async () => {
+    if (!sourceUrl || !srt || burning) return;
+    setBurning(true);
+    setBurnProgress(0);
+    try {
+      const blob = await burnCaptions({
+        videoUrl: sourceUrl,
+        srt,
+        onStage: setBurnStage,
+        onProgress: setBurnProgress,
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `korex-ad-${sourceVideo?.id ?? 'captioned'}-captioned.mp4`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast({
+        title: 'Captions burned in',
+        description: 'Your captioned video downloaded — ready to post as-is.',
+      });
+    } catch (err) {
+      console.error('[edit-studio] caption burn failed', err);
+      toast({
+        title: 'Could not burn captions in-browser',
+        description:
+          'Download the base clip and .srt file below and import them into a free editor instead.',
+        variant: 'destructive',
+      });
+    } finally {
+      setBurning(false);
+      setBurnStage(null);
+    }
   };
 
   const handlePickSource = async (id: string) => {
@@ -595,6 +635,42 @@ export function EditStudio({
                 {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
                 Copy text + timing sheet
               </Button>
+            </div>
+
+            <div className="rounded-md border border-primary/30 bg-primary/5 p-3 space-y-2">
+              <div className="flex items-start justify-between gap-3 flex-wrap">
+                <div className="space-y-0.5">
+                  <p className="text-xs font-medium">Skip the editor — burn captions right here</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    Renders the captioned video entirely in your browser — nothing is uploaded
+                    anywhere. First use downloads a one-time ~30MB caption engine; after that it's
+                    instant.
+                  </p>
+                </div>
+                <Button
+                  onClick={handleBurnCaptions}
+                  size="sm"
+                  className="gap-1.5 shrink-0"
+                  disabled={!sourceUrl || !srt || burning}
+                >
+                  {burning ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      {burnStage === 'loading-engine'
+                        ? 'Loading caption engine…'
+                        : `Burning captions… ${Math.round(burnProgress * 100)}%`}
+                    </>
+                  ) : (
+                    <>
+                      <Captions className="w-3.5 h-3.5" />
+                      Burn captions in-browser
+                    </>
+                  )}
+                </Button>
+              </div>
+              {!sourceUrl && (
+                <p className="text-[11px] text-amber-500">Pick a base clip above first.</p>
+              )}
             </div>
 
             <div className="space-y-2">
