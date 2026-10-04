@@ -168,6 +168,15 @@ Generate ${CANDIDATE_POOL} distinct candidates now.`;
       .filter((v: any) => typeof v?.caption === 'string' && v.caption.trim().length > 20)
       .map((v: any) => ({ ...v, caption: String(v.caption).trim() }));
 
+    if (!pool.length) {
+      // Was previously silent beyond a bare "pool 0 -> kept 0" log line --
+      // generate-ad-script hit this same shape of failure (gateway 200,
+      // but the model's JSON came back empty/malformed/wrapped) and the
+      // missing raw content cost several blind round-trips to diagnose.
+      // Log it here too so a recurrence is diagnosable from the first report.
+      console.error(`[caption-variants] no usable candidates from model output; stop_reason=${data?.choices?.[0]?.finish_reason}; raw content (first 2000 chars): ${String(raw).slice(0, 2000)}`);
+    }
+
     const voiceCorpus = await voiceCorpusPromise;
     const voiceReference = [String(caption || ''), voiceCorpus].filter(Boolean).join(' ');
     const groundingTerms = extractGroundingTerms([

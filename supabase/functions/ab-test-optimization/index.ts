@@ -205,6 +205,14 @@ Format as JSON with keys: recommendedVariables, contentVariations, bestPractices
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
+
+        // tool_choice can only be "auto" here (the gateway downgrades a
+        // forced choice to auto + a steering instruction -- Anthropic 400s
+        // on a genuinely forced tool_choice), so the model skipping the
+        // tool call and the generic fallback below firing is a real path,
+        // not dead code. Log it so a spike in fallback usage is visible
+        // instead of silently masquerading as real AI recommendations.
+        console.error(`[ab-test-optimization] model did not call provide_recommendations; stop_reason=${aiData.choices?.[0]?.finish_reason}; falling back to generated recommendations`);
       }
 
       // Fallback recommendations
