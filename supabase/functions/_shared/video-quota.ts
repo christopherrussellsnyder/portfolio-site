@@ -131,5 +131,3 @@ export async function resolveVideoQuota(
 
   return { userId: user.id, email, tier, limit, used, remaining, isTrial, supabase };
 }
-
-export { corsHeaders as videoCorsHeaders };
