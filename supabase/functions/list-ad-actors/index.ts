@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { resolveVideoQuota } from "../_shared/video-quota.ts";
 import { listHeygenAvatars, listHeygenVoices } from "../_shared/heygen.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { checkRateLimit, clientKey } from "../_shared/rate-limit.ts";
 
 // The actor catalog changes rarely; cache it project-wide to avoid burning
 // provider rate limit on every page visit.
@@ -19,6 +20,13 @@ serve(async (req) => {
 
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
+  }
+
+  // A force:true request bypasses the 24h cache and hits HeyGen live --
+  // without a limit this is an easy way to burn provider rate limit.
+  const rl = await checkRateLimit(clientKey(req, "list-ad-actors"), { limit: 20, windowMs: 60_000 });
+  if (!rl.ok) {
+    return json({ error: "Too many requests. Please wait a moment." }, 429);
   }
 
   // Browsing actors is allowed on every tier — the gate is on rendering.

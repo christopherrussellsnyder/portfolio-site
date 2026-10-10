@@ -2,10 +2,20 @@ import { createClient } from 'npm:@supabase/supabase-js@2';
 import { getCorsHeaders } from '../_shared/cors.ts';
 import { callLovableGateway } from '../_shared/llm-gateway.ts';
 import { requireAgency } from '../_shared/require-pro.ts';
+import { checkRateLimit, clientKey } from '../_shared/rate-limit.ts';
 
 Deno.serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
+
+  // This does a real LLM call per request -- even behind the Agency gate
+  // below, nothing stopped a paying user from spamming the generate button.
+  const rl = await checkRateLimit(clientKey(req, 'generate-client-report'), { limit: 10, windowMs: 60_000 });
+  if (!rl.ok) {
+    return new Response(JSON.stringify({ error: 'Too many report requests. Please wait a moment.' }), {
+      status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
 
   try {
     // Reports.tsx only renders the generate button for Agency (or founder)

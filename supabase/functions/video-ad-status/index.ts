@@ -3,6 +3,7 @@ import { resolveVideoQuota } from "../_shared/video-quota.ts";
 import { getHeygenStatus } from "../_shared/heygen.ts";
 import { formatSpec } from "../_shared/ad-production.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { checkRateLimit, clientKey } from "../_shared/rate-limit.ts";
 
 const BUCKET = "video-ads";
 const SIGNED_URL_TTL = 60 * 60; // 1 hour
@@ -56,6 +57,14 @@ serve(async (req) => {
 
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
+  }
+
+  // Generous: a user with several videos rendering at once polls each one
+  // independently every ~8s (see POLL_INTERVAL_MS in useVideoAds.ts), so this
+  // must have headroom for legitimate concurrent polling, not just a single video.
+  const rl = await checkRateLimit(clientKey(req, "video-ad-status"), { limit: 60, windowMs: 60_000 });
+  if (!rl.ok) {
+    return json({ error: "Too many requests. Please wait a moment." }, 429);
   }
 
   // Polling must not be quota-enforced — users check on renders they already paid for.
