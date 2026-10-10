@@ -1,5 +1,6 @@
 import { createClient } from 'npm:@supabase/supabase-js@2'
 import { getCorsHeaders } from '../_shared/cors.ts'
+import { checkRateLimit, clientKey } from '../_shared/rate-limit.ts'
 
 Deno.serve(async (req) => {
   const corsHeaders = getCorsHeaders(req)
@@ -18,6 +19,14 @@ Deno.serve(async (req) => {
 
   if (req.method !== 'GET' && req.method !== 'POST') {
     return jsonResponse({ error: 'Method not allowed' }, 405)
+  }
+
+  // This endpoint takes no auth at all by design (unsubscribe links must
+  // work with no session) -- rate limiting by IP is the only abuse control
+  // against token-guessing/enumeration traffic.
+  const rl = await checkRateLimit(clientKey(req, 'handle-email-unsubscribe'), { limit: 20, windowMs: 60_000 })
+  if (!rl.ok) {
+    return jsonResponse({ error: 'Too many requests. Please wait a moment.' }, 429)
   }
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')
