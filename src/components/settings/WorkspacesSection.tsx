@@ -27,7 +27,7 @@ export function WorkspacesSection() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
 
-  const isAgency = subscribed && tier === 'agency';
+  const isAgency = tier === 'founder' || (subscribed && tier === 'agency');
   const limitLabel = workspaceLimit === 999 ? '∞' : workspaceLimit;
 
   const handleCreate = async () => {
