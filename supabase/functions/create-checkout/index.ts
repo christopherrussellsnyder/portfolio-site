@@ -70,6 +70,13 @@ serve(async (req) => {
       // Launch promo code (KOREX, 15% off first month) applies to monthly plans only.
       // Annual plans already carry a 30% discount, so promo entry is disabled there.
       allow_promotion_codes: MONTHLY_PRICE_IDS.has(priceId),
+      // Carried onto the resulting Subscription object (not just this Session),
+      // so stripe-webhook can map a customer.subscription.* event straight back
+      // to a Supabase user without an email lookup -- email matching is what
+      // check-subscription falls back to for subscriptions created before this
+      // existed, but a direct id is the correct source of truth going forward.
+      metadata: { supabase_user_id: user.id },
+      subscription_data: { metadata: { supabase_user_id: user.id } },
 
       success_url: `${origin}/ai-strategist?checkout=success`,
       cancel_url: `${origin}/pricing?checkout=canceled`,

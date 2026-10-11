@@ -58,3 +58,10 @@ project_id = "vfwwhhkrquhbohlzazwo"
 
   [functions.fetch-meta-ad-performance]
   verify_jwt = false
+
+  # Stripe calls this directly with its own stripe-signature header, not a
+  # Supabase JWT -- verify_jwt = true at the gateway would reject every
+  # legitimate webhook delivery outright, before the function's own
+  # constructEventAsync signature check ever runs.
+  [functions.stripe-webhook]
+  verify_jwt = false
