@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { serviceClient } from "../_shared/supabase.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { requirePro } from "../_shared/require-pro.ts";
+import { checkRateLimit, clientKey } from "../_shared/rate-limit.ts";
 import { scrapeAdLibraryTerm, countryCodeFor } from "../_shared/strategy-intel.ts";
 import { z, parseJsonBody, UUID, ShortText } from "../_shared/validation.ts";
 
@@ -124,6 +125,9 @@ serve(async (req) => {
     const gate = await requirePro(req);
     if (gate instanceof Response) return gate;
     const userId = gate.userId;
+
+    const rl = await checkRateLimit(clientKey(req, "competitor-monitoring"), { limit: 20, windowMs: 60_000 });
+    if (!rl.ok) return json(corsHeaders, { error: "Too many requests. Please wait a moment." }, 429);
 
     if (action === "get_competitors") {
       const { data, error } = await admin

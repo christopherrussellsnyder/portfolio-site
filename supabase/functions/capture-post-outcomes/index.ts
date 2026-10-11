@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
 import { getCorsHeaders } from '../_shared/cors.ts';
+import { checkRateLimit, clientKey } from '../_shared/rate-limit.ts';
 
 // Captures real-world outcomes for strategy posts whose scheduled date is 48h-14d old.
 // - Users with an active Meta connection: pulls real ad performance (source='meta_api')
@@ -7,6 +8,17 @@ import { getCorsHeaders } from '../_shared/cors.ts';
 Deno.serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
+
+  // Only the signed-in-user path is rate-limited -- a cron call presents no
+  // Origin/IP worth bucketing on and this must never throttle the nightly job.
+  if (req.headers.get('Lovable-Context') !== 'cron') {
+    const rl = await checkRateLimit(clientKey(req, 'capture-post-outcomes'), { limit: 20, windowMs: 60_000 });
+    if (!rl.ok) {
+      return new Response(JSON.stringify({ error: 'Too many requests. Please wait a moment.' }), {
+        status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+  }
 
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
   const supabase = createClient(Deno.env.get('SUPABASE_URL')!, serviceKey);
