@@ -4,6 +4,7 @@ import { getCorsHeaders } from "../_shared/cors.ts";
 import { callLovableGateway } from "../_shared/llm-gateway.ts";
 import { fetchSearchDemand, fetchCompetitorAds, fetchVoiceOfCustomer, type IntelResult } from "../_shared/strategy-intel.ts";
 import { requirePro } from "../_shared/require-pro.ts";
+import { checkRateLimit, clientKey } from "../_shared/rate-limit.ts";
 import { z, parseJsonBody } from "../_shared/validation.ts";
 
 // This is the one LLM-calling function in the codebase still on a
@@ -67,6 +68,13 @@ serve(async (req) => {
   // this function now does. Same tier gate generate-caption-variants uses.
   const gate = await requirePro(req);
   if (gate instanceof Response) return gate;
+
+  const rl = await checkRateLimit(clientKey(req, 'analyze-audience-targeting'), { limit: 10, windowMs: 60_000 });
+  if (!rl.ok) {
+    return new Response(JSON.stringify({ error: 'Too many requests. Please wait a moment.' }), {
+      status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
 
   try {
     const parsed = await parseJsonBody(req, RequestSchema);
