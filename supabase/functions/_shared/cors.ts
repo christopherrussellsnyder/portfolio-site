@@ -13,6 +13,17 @@ const DEFAULT_ALLOWED_ORIGINS = [
   "http://localhost:5173",
 ];
 
+// Vite picks the next free port when its default is already in use (8081,
+// 8082, ...), so a hardcoded single dev-port entry above silently breaks
+// CORS -- not with an error that names the problem, but with every request
+// failing as an opaque browser-level "CORS error" with a 200 OK on its own
+// preflight, which reads exactly like a backend bug (this is the literal
+// failure that happened: check-subscription returning no usable response,
+// SubscriptionContext silently falling back to its signed-out default, and
+// a founder-tier account showing "Starter" everywhere). Any localhost port
+// is accepted in addition to the explicit list above so this can't recur.
+const LOCALHOST_ORIGIN = /^https?:\/\/localhost:\d+$/;
+
 function getAllowedOrigins(): string[] {
   const configured = Deno.env.get("ALLOWED_ORIGINS");
   if (configured) {
@@ -24,7 +35,8 @@ function getAllowedOrigins(): string[] {
 export function getCorsHeaders(req: Request): Record<string, string> {
   const origin = req.headers.get("Origin") ?? "";
   const allowedOrigins = getAllowedOrigins();
-  const allowOrigin = allowedOrigins.includes(origin) ? origin : allowedOrigins[0];
+  const isAllowed = allowedOrigins.includes(origin) || LOCALHOST_ORIGIN.test(origin);
+  const allowOrigin = isAllowed ? origin : allowedOrigins[0];
   return {
     "Access-Control-Allow-Origin": allowOrigin,
     "Access-Control-Allow-Headers":
