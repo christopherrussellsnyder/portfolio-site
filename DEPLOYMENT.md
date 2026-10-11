@@ -87,12 +87,32 @@ apart and the next Lovable rebuild can revert it.
 
 ### 5. Email Deliverability
 
-Supabase Auth's built-in email sender is rate-limited (a handful of
-emails/hour) — fine for development, not for real signups. Before
-real users sign up, configure a production SMTP provider (Resend,
-Postmark, SendGrid, etc.) under Supabase → Authentication → Email
-Settings, or signup confirmations and password resets will silently
-stop sending once you're past a handful of users in an hour.
+**Urgent, confirmed-broken as of this writing:** this project has a custom
+"Send Email" Auth Hook (`supabase/functions/auth-email-hook`) built on
+Lovable Cloud's own email infrastructure (`LOVABLE_API_KEY`), for branded
+signup/reset/magic-link/invite emails. Outside Lovable Cloud there is no
+working `LOVABLE_API_KEY`, so this hook 500s on every auth email attempt —
+and if it's registered as the active Send Email Hook in your Supabase
+project, that failure can block the triggering auth action itself (signup,
+password reset, etc.), not just silently skip the email. Check immediately:
+Supabase Dashboard → Authentication → Hooks → if "Send Email" is enabled
+and points at `auth-email-hook`, disable it.
+
+With that hook disabled, Supabase Auth's own built-in email sender is
+rate-limited (a handful of emails/hour) — fine for development, not for
+real signups. Before real users sign up, configure a production SMTP
+provider (Resend, Postmark, SendGrid, etc.) under Supabase → Authentication
+→ Settings → SMTP Settings. This makes signup confirmations, password
+resets, magic links and invites work immediately using Supabase's own
+default templates (not the custom React Email ones `auth-email-hook` would
+have sent) — re-wiring those custom templates onto a non-Lovable provider
+is separate, lower-urgency follow-up work.
+
+This project's in-app transactional email queue (`process-email-queue`,
+used for things like "your report is ready" notifications) is separate from
+the above and already fixed to use Resend's HTTP API directly — set
+`RESEND_API_KEY` as a Supabase Edge Function secret (see `.env.example`)
+and it works independently of the Auth Hook question.
 
 ### 6. Custom Domain (Optional)
 
