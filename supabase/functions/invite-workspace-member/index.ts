@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { checkRateLimit, clientKey } from "../_shared/rate-limit.ts";
+import { requireAgency } from "../_shared/require-pro.ts";
 
 const AGENCY_SEAT_LIMIT = 10;
 
@@ -32,6 +33,13 @@ serve(async (req) => {
     );
     if (userErr || !userData.user) throw new Error("Not authenticated");
     const user = userData.user;
+
+    // Team seats are sold as an Agency-tier perk (TeamMembersSection.tsx:
+    // "Upgrade to Agency to invite up to 10 teammates") -- that was only a
+    // frontend lock. Nothing server-side stopped a Starter or Pro account
+    // from inviting teammates directly against this endpoint.
+    const gate = await requireAgency(req);
+    if (gate instanceof Response) return gate;
 
     const { workspace_id, email, role } = await req.json();
     if (!workspace_id || !email) throw new Error("workspace_id and email are required");
