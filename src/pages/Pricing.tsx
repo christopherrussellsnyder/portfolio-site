@@ -16,7 +16,7 @@ const plans = [
     yearlyPrice: 831,
     popular: true,
     features: [
-      'Unlimited AI strategies',
+      '20 AI strategies per month',
       'Unlimited analytics uploads',
       'All platforms supported',
       '10 AI video ads per month',
@@ -33,6 +33,7 @@ const plans = [
     popular: false,
     features: [
       'Everything in Pro',
+      '75 AI strategies per month',
       '35 AI video ads per month',
       'Up to 10 client workspaces',
       'Up to 10 team seats per workspace',
