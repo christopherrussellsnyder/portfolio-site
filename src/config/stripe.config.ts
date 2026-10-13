@@ -11,7 +11,9 @@ export const STRIPE_TIERS = {
       product_id: 'prod_UuPsofAJQj79gO',
       price: 831,
     },
-    strategies_limit: Infinity,
+    // Enforced server-side in generate-strategy/index.ts -- keep these two
+    // numbers in sync with that file's STRATEGY_LIMITS if either changes.
+    strategies_limit: 20,
   },
   agency: {
     name: 'Agency',
@@ -25,7 +27,7 @@ export const STRIPE_TIERS = {
       product_id: 'prod_UuPtrGta7sU60Q',
       price: 2511,
     },
-    strategies_limit: Infinity,
+    strategies_limit: 75,
   },
 } as const;
 

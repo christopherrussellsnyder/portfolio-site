@@ -788,8 +788,15 @@ serve(async (req) => {
     const { platform, durationDays = 30, goals, customInstructions, conversationId, workspace_id: bodyWorkspaceId, contentMode = 'hybrid' } = await req.json() as StrategyRequest;
     const effectiveGoals = goals?.length ? goals : ['Increase engagement', 'Grow followers', 'Drive conversions'];
 
-    // Server-side enforcement of Starter plan lifetime cap (2 strategies).
-    // Subscribed users (Pro/Agency) are unlimited; only check non-subscribed users.
+    // Server-side enforcement of per-tier strategy caps. Founders bypass every
+    // limit below. Starter's cap is a one-time lifetime allowance (it's a free
+    // trial, not a recurring entitlement); Pro and Agency get a real monthly
+    // allowance that resets with the billing cycle -- generous enough that
+    // normal planning (drafting, iterating on angles, periodic refreshes)
+    // never hits it, but no longer literally Infinity, which had zero cost
+    // ceiling on the app's single most expensive LLM call.
+    const STRATEGY_LIMITS: Record<string, number> = { pro: 20, agency: 75 };
+
     const { data: localSub } = await supabase
       .from('subscriptions')
       .select('status, plan_type')
@@ -797,6 +804,7 @@ serve(async (req) => {
       .maybeSingle();
     const isPaid = localSub?.status === 'active' && (localSub.plan_type === 'pro' || localSub.plan_type === 'agency');
     const isFounder = isFounderEmail(user.email);
+
     if (!isPaid && !isFounder) {
       const { data: usageRow } = await supabase
         .from('usage_tracking')
@@ -808,7 +816,27 @@ serve(async (req) => {
       const used = usageRow?.lifetime_strategies_generated ?? 0;
       if (used >= 2) {
         return new Response(
-          JSON.stringify({ error: "You've used both of your Starter strategies. Upgrade to Pro or Agency to keep generating unlimited strategies.", code: 'UPGRADE_REQUIRED' }),
+          JSON.stringify({ error: "You've used both of your Starter strategies. Upgrade to Pro or Agency to keep generating strategies.", code: 'UPGRADE_REQUIRED' }),
+          { status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    } else if (isPaid && !isFounder) {
+      const tier = localSub!.plan_type as 'pro' | 'agency';
+      const limit = STRATEGY_LIMITS[tier];
+      const monthYear = new Date().toISOString().slice(0, 7); // 'YYYY-MM', matches the Postgres to_char(now(),'YYYY-MM') the DB side uses
+      const { data: monthRow } = await supabase
+        .from('usage_tracking')
+        .select('strategies_generated')
+        .eq('user_id', user.id)
+        .eq('month_year', monthYear)
+        .maybeSingle();
+      const usedThisMonth = monthRow?.strategies_generated ?? 0;
+      if (usedThisMonth >= limit) {
+        return new Response(
+          JSON.stringify({
+            error: `You've used all ${limit} strategy generations included in your ${tier === 'agency' ? 'Agency' : 'Pro'} plan this month. Your allowance resets on the 1st.`,
+            code: 'STRATEGY_QUOTA_EXHAUSTED',
+          }),
           { status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }

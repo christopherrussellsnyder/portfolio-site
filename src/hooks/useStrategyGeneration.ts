@@ -297,7 +297,8 @@ export function useStrategyGeneration() {
       const message = error instanceof Error ? error.message : 'Failed to generate strategy';
 
       // Sales funnel: plan-limit or credit-depletion opens the upgrade modal instead of a raw toast.
-      if (code === 'UPGRADE_REQUIRED' || code === 'AI_CREDITS_DEPLETED') {
+      // Same three codes useVideoAds.ts's handleFailure treats as upgrade-funnel triggers.
+      if (code === 'UPGRADE_REQUIRED' || code === 'STRATEGY_QUOTA_EXHAUSTED' || code === 'AI_CREDITS_DEPLETED') {
         window.dispatchEvent(
           new CustomEvent('korex:upgrade-required', {
             detail: { reason: code, message },
