@@ -1,4 +1,4 @@
-# MarketAI Deployment Guide
+# Korex Intelligence Systems — Deployment Guide
 
 ## Prerequisites
 
