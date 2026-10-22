@@ -52,6 +52,76 @@ function getBaseDomain(url: string): string {
   }
 }
 
+// SSRF guard: refuse to fetch a hostname that is itself a loopback,
+// private-range, link-local, or cloud-metadata address. This is a hostname
+// literal check (not a DNS-resolution check against the IP a public hostname
+// resolves to) -- it stops the common case of someone submitting
+// "http://169.254.169.254/..." or "http://192.168.1.1/..." directly as a
+// "website to scrape", without depending on Deno.resolveDns, which isn't
+// something edge function changes in this repo can execute/verify.
+function isBlockedHost(hostname: string): boolean {
+  const h = hostname.toLowerCase();
+  if (h === 'localhost' || h.endsWith('.localhost') || h.endsWith('.local')) return true;
+
+  // IPv4 literal?
+  const ipv4 = h.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (ipv4) {
+    const [a, b] = [parseInt(ipv4[1], 10), parseInt(ipv4[2], 10)];
+    if (a === 127) return true; // loopback
+    if (a === 10) return true; // private
+    if (a === 172 && b >= 16 && b <= 31) return true; // private
+    if (a === 192 && b === 168) return true; // private
+    if (a === 169 && b === 254) return true; // link-local incl. cloud metadata (169.254.169.254)
+    if (a === 0) return true; // "this network"
+    if (a >= 224) return true; // multicast/reserved
+    return false;
+  }
+
+  // IPv6 literal (bracketed or bare)?
+  const bare = h.replace(/^\[|\]$/g, '');
+  if (bare.includes(':')) {
+    if (bare === '::1') return true; // loopback
+    if (/^fe80:/i.test(bare)) return true; // link-local
+    if (/^f[cd][0-9a-f]{2}:/i.test(bare)) return true; // unique local (fc00::/7)
+    return false;
+  }
+
+  return false;
+}
+
+async function safeFetch(url: string, opts: RequestInit = {}, maxRedirects = 5): Promise<Response | null> {
+  let current = url;
+  for (let i = 0; i <= maxRedirects; i++) {
+    let parsed: URL;
+    try {
+      parsed = new URL(current);
+    } catch {
+      return null;
+    }
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
+    if (isBlockedHost(parsed.hostname)) {
+      console.log(`Refusing to fetch blocked host: ${parsed.hostname}`);
+      return null;
+    }
+
+    const response = await fetch(current, { ...opts, redirect: 'manual' });
+
+    if (response.status >= 300 && response.status < 400) {
+      const location = response.headers.get('location');
+      if (!location) return null;
+      try {
+        current = new URL(location, current).href;
+      } catch {
+        return null;
+      }
+      continue; // validate the redirect target on the next loop iteration
+    }
+
+    return response;
+  }
+  return null; // too many redirects
+}
+
 // Extract colors from CSS content
 function extractColors(html: string): string[] {
   const colorPatterns = [
@@ -96,7 +166,7 @@ async function scrapePage(url: string, baseDomain: string, pageType: string = 'u
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 30000);
     
-    const response = await fetch(url, {
+    const response = await safeFetch(url, {
       signal: controller.signal,
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Korex/1.0',
@@ -104,11 +174,11 @@ async function scrapePage(url: string, baseDomain: string, pageType: string = 'u
         'Accept-Language': 'en-US,en;q=0.5',
       },
     });
-    
+
     clearTimeout(timeoutId);
-    
-    if (!response.ok) {
-      console.log(`Page ${url} returned ${response.status}`);
+
+    if (!response || !response.ok) {
+      console.log(`Page ${url} returned ${response ? response.status : 'blocked/no response'}`);
       return null;
     }
     
@@ -335,13 +405,13 @@ function findPageByPatterns(urls: Set<string>, patterns: string[]): string | nul
 // Discover blog posts from a blog page
 async function discoverBlogPosts(blogUrl: string, baseDomain: string): Promise<string[]> {
   try {
-    const response = await fetch(blogUrl, {
+    const response = await safeFetch(blogUrl, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Korex/1.0',
       },
     });
-    
-    if (!response.ok) return [];
+
+    if (!response || !response.ok) return [];
     
     const html = await response.text();
     const parser = new DOMParser();
@@ -372,13 +442,13 @@ async function discoverBlogPosts(blogUrl: string, baseDomain: string): Promise<s
 // Discover product/service pages
 async function discoverProductPages(productsUrl: string, baseDomain: string): Promise<string[]> {
   try {
-    const response = await fetch(productsUrl, {
+    const response = await safeFetch(productsUrl, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Korex/1.0',
       },
     });
-    
-    if (!response.ok) return [];
+
+    if (!response || !response.ok) return [];
     
     const html = await response.text();
     const parser = new DOMParser();

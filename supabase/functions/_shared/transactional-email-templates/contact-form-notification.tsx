@@ -38,6 +38,11 @@ export const template = {
   component: ContactFormNotification,
   subject: (data: Record<string, any>) =>
     `[Contact Form] ${data.subject || 'New message'} — from ${data.name || 'visitor'}`,
+  // Fixed recipient — never the caller-supplied recipientEmail. This is what
+  // stops a direct (non-service-role) caller from redirecting a Korex-branded
+  // email to an address of their choosing; see send-transactional-email's
+  // `effectiveRecipient = template.to || recipientEmail` resolution.
+  to: 'korexintelligencesystems@gmail.com',
   displayName: 'Contact Form Notification',
   previewData: {
     name: 'Jane Doe',

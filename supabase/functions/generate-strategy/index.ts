@@ -1446,8 +1446,25 @@ serve(async (req) => {
     const dbPlatform = validPlatforms.includes(platform) ? platform : 'multi';
     const predictedMetrics = overview.predicted_metrics || {};
 
-    // Resolve workspace_id: body override -> user_profiles.active_workspace_id
-    let workspaceId = bodyWorkspaceId ?? null;
+    // Resolve workspace_id: body override -> user_profiles.active_workspace_id.
+    // The body value is client-supplied, so don't trust it without confirming
+    // the caller actually belongs to that workspace first -- otherwise any
+    // user could attribute their own row to an arbitrary (guessed/enumerated)
+    // workspace_id and pollute that workspace's usage/seat aggregates, even
+    // though RLS still stops them from ever reading the row back (it's scoped
+    // to auth.uid() = user_id, not workspace_id). Same pattern as
+    // generate-client-report's workspace_members membership check.
+    let workspaceId: string | null = null;
+    if (bodyWorkspaceId) {
+      const { data: member } = await supabase
+        .from('workspace_members')
+        .select('workspace_id')
+        .eq('workspace_id', bodyWorkspaceId)
+        .eq('user_id', user.id)
+        .maybeSingle();
+      if (member) workspaceId = bodyWorkspaceId;
+      else console.warn(`User ${user.id} supplied workspace_id ${bodyWorkspaceId} they are not a member of -- ignoring`);
+    }
     if (!workspaceId) {
       const { data: prof } = await supabase
         .from('user_profiles')
