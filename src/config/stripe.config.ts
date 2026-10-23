@@ -36,12 +36,22 @@ export const STARTER_STRATEGY_LIMIT = 2;
 // Backwards-compat alias (used by existing imports)
 export const TRIAL_STRATEGY_LIMIT = STARTER_STRATEGY_LIMIT;
 
-// Map all product IDs to tiers
+// Map all product IDs to tiers. Keep this in sync with the backend's own
+// copies (check-subscription/index.ts, stripe-webhook/index.ts) -- those are
+// the actual enforcement source of truth; this export has no current
+// frontend caller, but a stale version here would mislabel legacy
+// subscribers' tier if something ever reads it for display.
 export const PRODUCT_TO_TIER: Record<string, string> = {
+  // Current live products
   'prod_UuPs7XFGchuAOC': 'pro',
   'prod_UuPsofAJQj79gO': 'pro',
   'prod_UuPsM90xu8d47e': 'agency',
   'prod_UuPtrGta7sU60Q': 'agency',
+  // Historical products retained for existing subscriptions
+  'prod_UJLxjx4LDdH1Ps': 'pro',
+  'prod_UJLxyYaqUCGjHg': 'pro',
+  'prod_UJLyj76FsosYjb': 'agency',
+  'prod_UJLyrKQhr9PclL': 'agency',
 };
 
 export type SubscriptionTier = 'pro' | 'agency' | null;

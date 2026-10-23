@@ -3,6 +3,37 @@ import { renderAsync } from 'npm:@react-email/components@0.0.22'
 import { createClient } from 'npm:@supabase/supabase-js@2'
 import { TEMPLATES } from '../_shared/transactional-email-templates/registry.ts'
 import { getCorsHeaders } from '../_shared/cors.ts'
+import { checkRateLimit, clientKey } from '../_shared/rate-limit.ts'
+
+// Templates an unauthenticated/end-user caller (anon or authenticated JWT,
+// as opposed to service_role) may trigger directly. Every other template is
+// internal-only (funnel drip steps etc.) and must come from a service_role
+// caller (process-email-funnel and friends), never from a request carrying
+// just the public anon key -- otherwise anyone holding that key could pick
+// any template and any recipientEmail and get Korex to send Korex-branded
+// mail to an arbitrary address with arbitrary content.
+const PUBLIC_TEMPLATES = new Set(['contact-form-notification'])
+const ALLOWED_CONTACT_SUBJECTS = new Set([
+  'General Inquiry',
+  'Sales & Pricing',
+  'Technical Support',
+  'Partnership',
+  'Other',
+])
+
+function parseJwtClaims(token: string): Record<string, unknown> | null {
+  const parts = token.split('.')
+  if (parts.length < 2) return null
+  try {
+    const payload = parts[1]
+      .replaceAll('-', '+')
+      .replaceAll('_', '/')
+      .padEnd(Math.ceil(parts[1].length / 4) * 4, '=')
+    return JSON.parse(atob(payload)) as Record<string, unknown>
+  } catch {
+    return null
+  }
+}
 
 // Configuration baked in at scaffold time — do NOT change these manually.
 // To update, re-run the email domain setup flow.
@@ -25,9 +56,11 @@ function generateToken(): string {
     .join('')
 }
 
-// Auth note: this function uses verify_jwt = true in config.toml, so Supabase's
-// gateway validates the caller's JWT (anon or service_role) before the request
-// reaches this code. No in-function auth check is needed.
+// Auth note: verify_jwt = true in config.toml only guarantees the caller holds
+// *some* valid JWT -- the public anon key (shipped in every frontend bundle)
+// satisfies that. It does NOT by itself distinguish a trusted internal caller
+// (process-email-funnel, invoked with the service-role key) from an anonymous
+// visitor hitting this endpoint directly. See the in-function role check below.
 
 Deno.serve(async (req) => {
   const corsHeaders = getCorsHeaders(req)
@@ -85,6 +118,50 @@ Deno.serve(async (req) => {
     )
   }
 
+  const authHeader = req.headers.get('Authorization')
+  const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.slice('Bearer '.length).trim() : null
+  const isServiceRole = bearerToken ? parseJwtClaims(bearerToken)?.role === 'service_role' : false
+
+  if (!isServiceRole) {
+    if (!PUBLIC_TEMPLATES.has(templateName)) {
+      return new Response(
+        JSON.stringify({ error: 'This template is not directly callable.' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    // A direct (non-service-role) call to a public template is, by definition,
+    // reachable with just the anon key -- rate-limit it per caller IP. The
+    // frontend's own sessionStorage counter (Contact.tsx) is not a substitute:
+    // it's trivially bypassed by calling this function directly.
+    const rl = await checkRateLimit(clientKey(req, 'send-transactional-email'), { limit: 5, windowMs: 3_600_000 })
+    if (!rl.ok) {
+      return new Response(
+        JSON.stringify({ error: 'Too many requests. Please try again later.' }),
+        { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    // The contact-form-notification template renders templateData verbatim
+    // into an email. Bound it the same way the Contact page's own form does,
+    // since a direct API call bypasses that client-side validation entirely.
+    if (templateName === 'contact-form-notification') {
+      const d = templateData as Record<string, unknown>
+      const name = typeof d.name === 'string' ? d.name.trim().slice(0, 100) : ''
+      const email = typeof d.email === 'string' ? d.email.trim().slice(0, 255) : ''
+      const subject = typeof d.subject === 'string' && ALLOWED_CONTACT_SUBJECTS.has(d.subject) ? d.subject : 'General Inquiry'
+      const message = typeof d.message === 'string' ? d.message.trim().slice(0, 5000) : ''
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+      if (!name || !message || !emailRegex.test(email)) {
+        return new Response(
+          JSON.stringify({ error: 'Invalid contact form data.' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+      templateData = { name, email, subject, message }
+    }
+  }
+
   // 1. Look up template from registry (early — needed to resolve recipient)
   const template = TEMPLATES[templateName]
 
@@ -98,6 +175,18 @@ Deno.serve(async (req) => {
         status: 404,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       }
+    )
+  }
+
+  // Defense in depth: a public (non-service-role) template MUST carry a
+  // fixed `to` in the registry. If someone adds a new entry to
+  // PUBLIC_TEMPLATES later without giving it a `to`, fail closed here
+  // instead of silently falling through to the caller-supplied recipientEmail.
+  if (!isServiceRole && PUBLIC_TEMPLATES.has(templateName) && !template.to) {
+    console.error('Public template missing fixed `to` -- refusing to send', { templateName })
+    return new Response(
+      JSON.stringify({ error: 'Server configuration error' }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   }
 
