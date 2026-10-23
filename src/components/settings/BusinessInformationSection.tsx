@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
@@ -6,9 +6,9 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { 
-  Building2, Users, Palette, Image, BarChart3, ChevronDown, 
-  Save, Loader2, Info, HelpCircle, CheckCircle2, Tag
+import {
+  Building2, Users, Palette, Image, BarChart3, ChevronDown,
+  Save, Loader2, Info, HelpCircle, CheckCircle2, Tag, Check, Cloud
 } from 'lucide-react';
 import { calculateBusinessInfoCompletion } from '@/lib/businessProfileCompletion';
 import { CompanyDetailsSection } from './business-info/CompanyDetailsSection';
@@ -192,6 +192,22 @@ export const BusinessInformationSection: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [showWhyCollect, setShowWhyCollect] = useState(false);
+  // 'idle' before anything's loaded; 'saved' right after load (nothing to
+  // autosave yet); 'unsaved' while a change is pending in the debounce
+  // window; 'saving' while the upsert is in flight.
+  const [autosaveStatus, setAutosaveStatus] = useState<'idle' | 'unsaved' | 'saving' | 'saved' | 'error'>('idle');
+
+  // Always hold the latest state, independent of React's render/effect
+  // timing -- read by the unmount-flush below, whose cleanup closure would
+  // otherwise see whatever isLoading/user were on the render that registered
+  // it (an empty dependency array means it never re-registers), not their
+  // current values at the moment the component actually unmounts.
+  const businessInfoRef = useRef(businessInfo);
+  useEffect(() => { businessInfoRef.current = businessInfo; }, [businessInfo]);
+  const isLoadingRef = useRef(isLoading);
+  useEffect(() => { isLoadingRef.current = isLoading; }, [isLoading]);
+  const userRef = useRef(user);
+  useEffect(() => { userRef.current = user; }, [user]);
   
   // Section open states
   const [openSections, setOpenSections] = useState({
@@ -295,6 +311,7 @@ export const BusinessInformationSection: React.FC = () => {
             best_performing_content_types: (data.best_performing_content_types as string[]) || []
           });
         }
+        setAutosaveStatus('saved');
       } catch (err) {
         console.error('Failed to load business info:', err);
       } finally {
@@ -305,36 +322,47 @@ export const BusinessInformationSection: React.FC = () => {
     loadBusinessInfo();
   }, [user]);
 
+  // Shared by the manual Save button, the debounced autosave, and the
+  // save-on-leave flush below -- takes the info to save explicitly rather
+  // than reading `businessInfo` from closure, so a call made from an unmount
+  // cleanup (where React state is stale) still writes the real latest data.
+  const persistBusinessInfo = useCallback(async (info: BusinessInformation, userId: string) => {
+    const dataToSave = {
+      user_id: userId,
+      ...info,
+      top_competitors: info.top_competitors,
+      gender_distribution: info.gender_distribution,
+      education_levels: info.education_levels,
+      geographic_focus: info.geographic_focus,
+      brand_voice_traits: info.brand_voice_traits,
+      content_themes: info.content_themes,
+      brand_values: info.brand_values,
+      available_content_types: info.available_content_types,
+      best_performing_content_types: info.best_performing_content_types
+    };
+
+    const { error } = await supabase
+      .from('business_information')
+      .upsert(dataToSave, { onConflict: 'user_id' });
+
+    if (error) throw error;
+  }, []);
+
   const handleSave = async () => {
     if (!user) return;
-    
+
     setIsSaving(true);
+    setAutosaveStatus('saving');
     try {
-      const dataToSave = {
-        user_id: user.id,
-        ...businessInfo,
-        top_competitors: businessInfo.top_competitors,
-        gender_distribution: businessInfo.gender_distribution,
-        education_levels: businessInfo.education_levels,
-        geographic_focus: businessInfo.geographic_focus,
-        brand_voice_traits: businessInfo.brand_voice_traits,
-        content_themes: businessInfo.content_themes,
-        brand_values: businessInfo.brand_values,
-        available_content_types: businessInfo.available_content_types,
-        best_performing_content_types: businessInfo.best_performing_content_types
-      };
-
-      const { error } = await supabase
-        .from('business_information')
-        .upsert(dataToSave, { onConflict: 'user_id' });
-
-      if (error) throw error;
+      await persistBusinessInfo(businessInfo, user.id);
+      setAutosaveStatus('saved');
 
       toast({
         title: 'Business information saved',
         description: 'Your profile has been updated successfully.'
       });
     } catch (err: any) {
+      setAutosaveStatus('error');
       toast({
         title: 'Error saving',
         description: err.message || 'Failed to save business information.',
@@ -344,6 +372,47 @@ export const BusinessInformationSection: React.FC = () => {
       setIsSaving(false);
     }
   };
+
+  // Autosave: 1.5s after the last edit, write the current form state. Skipped
+  // until the initial load finishes (never overwrite real saved data with the
+  // empty defaultBusinessInfo state the form starts with), and whenever the
+  // debounce window is interrupted by another edit, the pending timer is
+  // cleared and restarted -- standard debounce.
+  useEffect(() => {
+    if (isLoading || !user) return;
+    setAutosaveStatus('unsaved');
+
+    const timer = setTimeout(async () => {
+      setAutosaveStatus('saving');
+      try {
+        await persistBusinessInfo(businessInfo, user.id);
+        setAutosaveStatus('saved');
+      } catch (err) {
+        console.error('Autosave failed:', err);
+        setAutosaveStatus('error');
+      }
+    }, 1500);
+
+    return () => clearTimeout(timer);
+  }, [businessInfo, isLoading, user, persistBusinessInfo]);
+
+  // Save-on-leave: this is the actual fix for "navigating away loses what I
+  // typed" -- switching Settings tabs or routing elsewhere unmounts this
+  // component immediately, which can happen well inside the 1.5s debounce
+  // window above. Flush whatever's in the ref (the real latest state,
+  // unaffected by React's stale-closure-on-unmount behavior) the moment that
+  // happens. Fire-and-forget is correct here: the component is gone, there's
+  // nowhere to show a result, but the request itself still completes.
+  useEffect(() => {
+    return () => {
+      if (!isLoadingRef.current && userRef.current) {
+        persistBusinessInfo(businessInfoRef.current, userRef.current.id).catch((err) => {
+          console.error('Save-on-leave failed:', err);
+        });
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const completionPercentage = calculateCompletion();
 
@@ -495,8 +564,31 @@ export const BusinessInformationSection: React.FC = () => {
         </CollapsibleSection>
       </div>
 
-      {/* Save Button */}
-      <div className="flex justify-end pt-4">
+      {/* Save Button + autosave status */}
+      <div className="flex items-center justify-end gap-3 pt-4">
+        <span className="text-xs text-muted-foreground flex items-center gap-1.5" aria-live="polite">
+          {autosaveStatus === 'saving' && (
+            <>
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              Saving...
+            </>
+          )}
+          {autosaveStatus === 'saved' && (
+            <>
+              <Check className="w-3.5 h-3.5 text-green-500" />
+              All changes saved
+            </>
+          )}
+          {autosaveStatus === 'unsaved' && (
+            <>
+              <Cloud className="w-3.5 h-3.5" />
+              Saving shortly...
+            </>
+          )}
+          {autosaveStatus === 'error' && (
+            <span className="text-destructive">Autosave failed -- click Save to retry</span>
+          )}
+        </span>
         <Button onClick={handleSave} disabled={isSaving} size="lg">
           {isSaving ? (
             <>
