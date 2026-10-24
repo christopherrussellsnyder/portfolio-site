@@ -422,7 +422,20 @@ async function criticPass(
     category: p?.content_details?.content_category,
   }));
 
+  const audienceParts = [
+    ctx.targetAudience,
+    ctx.ageRange && `Age ${ctx.ageRange}`,
+    ctx.genderSplit,
+    ctx.incomeLevel && `Income: ${ctx.incomeLevel}`,
+    ctx.buyingBehavior && `Buying behavior: ${ctx.buyingBehavior}`,
+    ctx.painPoints && `Stated pain points: ${ctx.painPoints}`,
+  ].filter(Boolean);
+  const audienceSummary = audienceParts.length ? audienceParts.join(' | ') : 'No audience profile on file — grade this dimension leniently.';
+
   const criticPrompt = `You are a skeptical CMO reviewing a drafted ${platform} content plan for ${ctx.businessName} (${ctx.industry}).
+
+TARGET AUDIENCE THIS PLAN MUST SPEAK TO:
+${audienceSummary}
 
 GROUNDING TRUTH AVAILABLE TO THE WRITER:
 ${groundingSummary || 'None beyond the business profile.'}
@@ -438,11 +451,12 @@ Grade each post 0-100 on these SPECIFIC, SEPARATELY-SCORED dimensions, then aver
 (d) cta_clarity — does the reader know exactly what to do next?
 (e) originality — does it avoid the saturated tropes in this niche?
 (f) prediction_realism — is the forecast consistent with the calibration data above?
+(g) audience_resonance — would THIS specific audience (above) recognize themselves in this post? A post that's well-written but generic enough to target anyone scores under 40 here, even if every other dimension is strong. Check: does the hook/body speak to their actual stated pain points, buying behavior, or demographic reality, in language they'd actually use — not just a demographic label bolted onto generic copy?
 
 Return ONLY JSON:
-{"scores":[{"index":0,"score":0,"dimensions":{"hook_stopping_power":0,"specificity":0,"evidence_anchoring":0,"cta_clarity":0,"originality":0,"prediction_realism":0},"verdict":"keep|rewrite","problem":"one sentence"}],"rewrites":[{"index":0,"hook":"new 5-10 word hook","technique":"archetype","opening":"2-3 sentences","body":"100-150 words","cta":"new cta text","full_caption":"150-250 word caption","differentiation_anchor":"which real product/UVP/pain point"}]}
+{"scores":[{"index":0,"score":0,"dimensions":{"hook_stopping_power":0,"specificity":0,"evidence_anchoring":0,"cta_clarity":0,"originality":0,"prediction_realism":0,"audience_resonance":0},"verdict":"keep|rewrite","problem":"one sentence"}],"rewrites":[{"index":0,"hook":"new 5-10 word hook","technique":"archetype","opening":"2-3 sentences","body":"100-150 words","cta":"new cta text","full_caption":"150-250 word caption","differentiation_anchor":"which real product/UVP/pain point"}]}
 
-Mark "rewrite" for any post scoring under 75, and for every post named in the pre-screen above. Provide a rewrite object for every post marked rewrite (max 6 rewrites). Rewrites must keep the same content_category and day, and must be anchored to a real input — never invent products, prices, or claims.`;
+Mark "rewrite" for any post scoring under 75, and for every post named in the pre-screen above. Provide a rewrite object for every post marked rewrite (max 6 rewrites). Rewrites must keep the same content_category and day, must be anchored to a real input — never invent products, prices, or claims — and must specifically close the audience_resonance gap if that's why the post was flagged.`;
 
 
   try {
