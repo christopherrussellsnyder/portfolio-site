@@ -457,32 +457,42 @@ const Index = () => {
             </p>
           </AnimatedSection>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {[
-              {
-                t: 'What it collects',
-                b: 'Search demand for your category, ads currently running by competitors, hooks and formats performing organically per platform, and how buyers describe the problem in their own words.',
-              },
-              {
-                t: 'How it gets it',
-                b: 'Live search and ad-library queries, platform-level content pattern extraction, community discussion mining, and a crawl of your own site for offer, pricing and positioning.',
-              },
-              {
-                t: 'How it is cleaned',
-                b: 'Raw signals are de-duplicated, scored for relevance to your niche and stripped of noise. Anything that cannot be tied back to a source is discarded rather than guessed.',
-              },
-              {
-                t: 'Why it stays current',
-                b: 'The intelligence layer refreshes on a rolling 24-hour cycle and is cached per niche, so every strategy and every ad script draws from the same fresh, shared evidence base.',
-              },
-            ].map((c, i) => (
-              <AnimatedSection key={c.t} delay={i * 0.08}>
-                <div className="bg-card border border-border rounded-sm p-6 h-full">
-                  <h3 className="font-bold mb-2">{c.t}</h3>
-                  <p className="text-muted-foreground text-sm leading-relaxed">{c.b}</p>
-                </div>
-              </AnimatedSection>
-            ))}
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+              {[
+                {
+                  t: 'What it collects',
+                  b: 'Search demand for your category, ads currently running by competitors, hooks and formats performing organically per platform, and how buyers describe the problem in their own words.',
+                },
+                {
+                  t: 'How it gets it',
+                  b: 'Live search and ad-library queries, platform-level content pattern extraction, community discussion mining, and a crawl of your own site for offer, pricing and positioning.',
+                },
+                {
+                  t: 'How it is cleaned',
+                  b: 'Raw signals are de-duplicated, scored for relevance to your niche and stripped of noise. Anything that cannot be tied back to a source is discarded rather than guessed.',
+                },
+                {
+                  t: 'Why it stays current',
+                  b: 'The intelligence layer refreshes on a rolling 24-hour cycle and is cached per niche, so every strategy and every ad script draws from the same fresh, shared evidence base.',
+                },
+              ].map((c, i) => (
+                <AnimatedSection key={c.t} delay={i * 0.08}>
+                  <div className="bg-card border border-border rounded-sm p-6 h-full">
+                    <h3 className="font-bold mb-2">{c.t}</h3>
+                    <p className="text-muted-foreground text-sm leading-relaxed">{c.b}</p>
+                  </div>
+                </AnimatedSection>
+              ))}
+            </div>
+
+            <AnimatedSection delay={0.2} className="hidden lg:block">
+              <img
+                src="/images/atmosphere-notebook.jpg"
+                alt=""
+                className="w-full h-full object-cover rounded-sm border border-border"
+              />
+            </AnimatedSection>
           </div>
 
           <AnimatedSection className="mt-8" delay={0.3}>
@@ -498,8 +508,16 @@ const Index = () => {
 
 
       {/* =================== FOUNDER'S NOTE =================== */}
-      <section className="py-24 px-4">
-        <div className="max-w-3xl mx-auto">
+      <section className="relative py-28 px-4 overflow-hidden">
+        <img
+          src="/images/atmosphere-desk.jpg"
+          alt=""
+          className="absolute inset-0 w-full h-full object-cover"
+        />
+        <div className="absolute inset-0 bg-[hsl(var(--background)/0.88)]" />
+        <div className="absolute inset-0 bg-gradient-to-t from-[hsl(var(--primary)/0.12)] to-transparent" />
+
+        <div className="relative max-w-3xl mx-auto">
           <AnimatedSection className="text-center mb-10">
             <p className="eyebrow mb-4">A note from the founder</p>
             <h2 className="text-3xl sm:text-[40px] font-semibold">
@@ -508,7 +526,7 @@ const Index = () => {
           </AnimatedSection>
 
           <AnimatedSection delay={0.1}>
-            <div className="bg-card border border-border rounded-sm p-8">
+            <div className="bg-card/95 backdrop-blur-sm border border-border rounded-sm p-8">
               <p className="text-lg text-foreground leading-relaxed mb-4">
                 Every agency quote I priced out started the same way — an opinion, dressed up as a strategy, for $3,000 to
                 $10,000 a month. Every AI tool I tried did the opposite problem: confident, fluent, and working entirely
