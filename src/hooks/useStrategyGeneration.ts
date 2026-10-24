@@ -128,6 +128,9 @@ export interface StrategicRationale {
   arc_positioning?: string;
   builds_toward?: string;
   success_metrics?: string;
+  /** Which specific audience trait/pain point this post addresses and how --
+   *  from the critic pass's audience_resonance grading. */
+  audience_fit?: string;
 }
 
 export interface OptimizationTips {

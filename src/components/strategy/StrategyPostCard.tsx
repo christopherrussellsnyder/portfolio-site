@@ -833,6 +833,12 @@ export function StrategyPostCard({ post, platform, onEdit, onAskAI }: StrategyPo
                       <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">
                         <Target className="w-4 h-4" /> Strategic Rationale
                       </h4>
+                      {strategicRationale.audience_fit && (
+                        <div className="rounded-md border border-primary/20 bg-primary/5 px-3 py-2">
+                          <p className="text-xs text-primary font-medium">Audience Fit:</p>
+                          <p className="text-sm text-foreground">{strategicRationale.audience_fit}</p>
+                        </div>
+                      )}
                       {strategicRationale.why_this_day && (
                         <div>
                           <p className="text-xs text-muted-foreground">Why This Day:</p>

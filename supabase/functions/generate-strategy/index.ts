@@ -453,8 +453,10 @@ Grade each post 0-100 on these SPECIFIC, SEPARATELY-SCORED dimensions, then aver
 (f) prediction_realism — is the forecast consistent with the calibration data above?
 (g) audience_resonance — would THIS specific audience (above) recognize themselves in this post? A post that's well-written but generic enough to target anyone scores under 40 here, even if every other dimension is strong. Check: does the hook/body speak to their actual stated pain points, buying behavior, or demographic reality, in language they'd actually use — not just a demographic label bolted onto generic copy?
 
+For every post (not just rewrites), also state WHICH specific audience trait or pain point from the target audience above it actually addresses, and how — one sentence, concrete, for the business owner to read (e.g. "Speaks directly to the 'no time to post consistently' pain point via the time-saved framing in the hook"). If it doesn't meaningfully address any of them, say so plainly rather than forcing a connection.
+
 Return ONLY JSON:
-{"scores":[{"index":0,"score":0,"dimensions":{"hook_stopping_power":0,"specificity":0,"evidence_anchoring":0,"cta_clarity":0,"originality":0,"prediction_realism":0,"audience_resonance":0},"verdict":"keep|rewrite","problem":"one sentence"}],"rewrites":[{"index":0,"hook":"new 5-10 word hook","technique":"archetype","opening":"2-3 sentences","body":"100-150 words","cta":"new cta text","full_caption":"150-250 word caption","differentiation_anchor":"which real product/UVP/pain point"}]}
+{"scores":[{"index":0,"score":0,"dimensions":{"hook_stopping_power":0,"specificity":0,"evidence_anchoring":0,"cta_clarity":0,"originality":0,"prediction_realism":0,"audience_resonance":0},"verdict":"keep|rewrite","problem":"one sentence","audience_fit":"one sentence naming the specific audience trait/pain point this post addresses and how"}],"rewrites":[{"index":0,"hook":"new 5-10 word hook","technique":"archetype","opening":"2-3 sentences","body":"100-150 words","cta":"new cta text","full_caption":"150-250 word caption","differentiation_anchor":"which real product/UVP/pain point"}]}
 
 Mark "rewrite" for any post scoring under 75, and for every post named in the pre-screen above. Provide a rewrite object for every post marked rewrite (max 6 rewrites). Rewrites must keep the same content_category and day, must be anchored to a real input — never invent products, prices, or claims — and must specifically close the audience_resonance gap if that's why the post was flagged.`;
 
@@ -480,6 +482,12 @@ Mark "rewrite" for any post scoring under 75, and for every post named in the pr
         problem: s.problem,
         dimensions: s.dimensions ?? null,
       };
+      // Piggyback on strategic_rationale (an existing, already-persisted jsonb
+      // column) rather than adding a migration for one more string field --
+      // StrategyPostCard already renders this object's other fields.
+      if (s.audience_fit) {
+        p.strategic_rationale = { ...(p.strategic_rationale || {}), audience_fit: s.audience_fit };
+      }
     }
 
     let applied = 0;
