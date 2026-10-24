@@ -1,13 +1,17 @@
 import { Link } from 'react-router-dom';
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { motion, useInView, AnimatePresence } from 'framer-motion';
 import {
-  Brain, BarChart3, ChevronDown,
+  ChevronDown,
   Check, X, ArrowRight, Shield,
-  Clock, Lock, Globe,
-  Video, Search, Building2, FileBarChart, SplitSquareHorizontal,
-  Image as ImageIcon, CreditCard, Activity,
+  Clock, Lock,
+  CreditCard, Activity,
 } from 'lucide-react';
+import {
+  SignalIcon, ReadBusinessIcon, BuildPlanIcon, ReviewIcon,
+  StrategyEngineIcon, ResearchIcon, VideoAdsIcon, ImageStudioIcon,
+  CaptionVariantsIcon, WorkspacesIcon, ReportsIcon, AnalyticsIcon,
+} from '@/components/branding/CapabilityIcons';
 
 import { KorexLogoLockup } from '@/components/branding/KorexLogoLockup';
 import { Seo } from '@/components/Seo';
@@ -32,10 +36,10 @@ const painPoints = [
 ];
 
 const howItWorks = [
-  { icon: Search, title: 'We read the market', desc: 'Live search demand, competitor ads and community discussion in your niche are pulled in as evidence.' },
-  { icon: Globe, title: 'We read your business', desc: 'Your site is crawled and your uploaded analytics parsed, so the plan is grounded in your real offer and real numbers.' },
-  { icon: Brain, title: 'We build the plan', desc: 'Every post is written against platform ranking behaviour — hook, format, timing and campaign structure.' },
-  { icon: Shield, title: 'We review it before you see it', desc: 'A senior-strategist critic pass challenges weak angles and rewrites the plan before delivery.' },
+  { icon: SignalIcon, title: 'We read the market', desc: 'Live search demand, competitor ads and community discussion in your niche are pulled in as evidence.' },
+  { icon: ReadBusinessIcon, title: 'We read your business', desc: 'Your site is crawled and your uploaded analytics parsed, so the plan is grounded in your real offer and real numbers.' },
+  { icon: BuildPlanIcon, title: 'We build the plan', desc: 'Every post is written against platform ranking behaviour — hook, format, timing and campaign structure.' },
+  { icon: ReviewIcon, title: 'We review it before you see it', desc: 'A senior-strategist critic pass challenges weak angles and rewrites the plan before delivery.' },
 ];
 
 const comparisonData = [
@@ -69,14 +73,14 @@ const faqs = [
 const platforms = ['Instagram', 'Facebook', 'LinkedIn', 'TikTok', 'Twitter', 'YouTube', 'Pinterest', 'Google Ads', 'Shopify'];
 
 const capabilities = [
-  { icon: Brain, title: 'Live-Data Strategy Engine', desc: 'Real search demand, competitor ad recon, and community sentiment feed every plan — then a CMO-grade critic pass rewrites it before you see it.' },
-  { icon: Search, title: 'Research Analysis', desc: 'Industry trend reports and personalized market research for your exact niche.' },
-  { icon: Video, title: 'AI Video Ads', desc: 'Script, cast an AI actor and voice, render. Studio-grade UGC ads without a film crew.' },
-  { icon: ImageIcon, title: 'AI Image Studio', desc: 'Cinematic art direction plus flagship rendering for creative that looks art-directed.' },
-  { icon: SplitSquareHorizontal, title: 'Caption A/B Variants', desc: 'Multiple hook angles per post, scored for strength, so you test copy instead of guessing.' },
-  { icon: Building2, title: 'Multi-Brand Workspaces', desc: 'Run every brand or client side by side with isolated data and team seats.' },
-  { icon: FileBarChart, title: 'White-Label Reports', desc: 'Branded client exports and shareable public report links.' },
-  { icon: BarChart3, title: 'Analytics Intelligence', desc: 'Upload any platform export or screenshot — Korex scores it and feeds the wins back into your next strategy.' },
+  { icon: StrategyEngineIcon, title: 'Live-Data Strategy Engine', desc: 'Real search demand, competitor ad recon, and community sentiment feed every plan — then a CMO-grade critic pass rewrites it before you see it.' },
+  { icon: ResearchIcon, title: 'Research Analysis', desc: 'Industry trend reports and personalized market research for your exact niche.' },
+  { icon: VideoAdsIcon, title: 'AI Video Ads', desc: 'Script, cast an AI actor and voice, render. Studio-grade UGC ads without a film crew.' },
+  { icon: ImageStudioIcon, title: 'AI Image Studio', desc: 'Cinematic art direction plus flagship rendering for creative that looks art-directed.' },
+  { icon: CaptionVariantsIcon, title: 'Caption A/B Variants', desc: 'Multiple hook angles per post, scored for strength, so you test copy instead of guessing.' },
+  { icon: WorkspacesIcon, title: 'Multi-Brand Workspaces', desc: 'Run every brand or client side by side with isolated data and team seats.' },
+  { icon: ReportsIcon, title: 'White-Label Reports', desc: 'Branded client exports and shareable public report links.' },
+  { icon: AnalyticsIcon, title: 'Analytics Intelligence', desc: 'Upload any platform export or screenshot — Korex scores it and feeds the wins back into your next strategy.' },
 ];
 
 const pricing = [
@@ -248,18 +252,23 @@ const Index = () => {
             <p className="text-muted-foreground text-lg mt-4">Four stages run on every generation. Plain English, no jargon required.</p>
           </AnimatedSection>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          {/* A connected sequence, not four separate boxes -- the line is the
+              point: each stage feeds the next one. */}
+          <div className="flex flex-col lg:flex-row lg:items-start">
             {howItWorks.map((step, i) => (
-              <AnimatedSection key={i} delay={i * 0.1}>
-                <div className="bg-card border border-border rounded-sm p-6 text-center hover:border-[hsl(var(--primary)/0.5)] transition-all h-full">
-                  <div className="w-14 h-14 rounded-full bg-primary flex items-center justify-center mx-auto mb-4 text-white font-semibold text-lg shadow-[0_0_20px_hsl(var(--primary) / 0.3)]">
+              <Fragment key={i}>
+                {i > 0 && (
+                  <div className="hidden lg:block w-10 h-0.5 bg-[hsl(var(--primary)/0.35)] mt-7 shrink-0" />
+                )}
+                <AnimatedSection delay={i * 0.1} className="flex-1 text-center mb-10 lg:mb-0">
+                  <div className="w-14 h-14 rounded-full bg-primary flex items-center justify-center mx-auto mb-4 text-white font-semibold text-lg shadow-[0_0_20px_hsl(var(--primary)/0.3)]">
                     {i + 1}
                   </div>
-                  <step.icon className="w-6 h-6 text-primary mx-auto mb-3" />
+                  <step.icon className="w-7 h-7 mx-auto mb-3" />
                   <h3 className="text-lg font-bold mb-2">{step.title}</h3>
-                  <p className="text-muted-foreground text-sm">{step.desc}</p>
-                </div>
-              </AnimatedSection>
+                  <p className="text-muted-foreground text-sm px-2 lg:px-4">{step.desc}</p>
+                </AnimatedSection>
+              </Fragment>
             ))}
           </div>
 
@@ -286,7 +295,7 @@ const Index = () => {
               <AnimatedSection key={i} delay={(i % 4) * 0.08}>
                 <div className="p-8 h-full border-r border-b border-[hsl(var(--foreground)/0.1)] hover:bg-muted/60 transition-colors">
                   <span className="eyebrow block mb-6">{String(i + 1).padStart(2, '0')}</span>
-                  <c.icon className="w-5 h-5 text-primary mb-4" />
+                  <c.icon className="w-7 h-7 mb-4" />
                   <h3 className="font-semibold text-lg tracking-tight mb-3">{c.title}</h3>
                   <p className="text-muted-foreground text-sm leading-relaxed">{c.desc}</p>
                 </div>
