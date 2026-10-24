@@ -4,10 +4,9 @@ import { motion, useInView, AnimatePresence } from 'framer-motion';
 import {
   Brain, BarChart3, ChevronDown,
   Check, X, ArrowRight, Shield,
-  Clock, DollarSign, Users, Zap,
-  Lock, Globe, Award,
+  Clock, Lock, Globe,
   Video, Search, Building2, FileBarChart, SplitSquareHorizontal,
-  Image as ImageIcon,
+  Image as ImageIcon, CreditCard, Activity,
 } from 'lucide-react';
 
 import { KorexLogoLockup } from '@/components/branding/KorexLogoLockup';
@@ -83,11 +82,11 @@ const capabilities = [
 const pricing = [
   {
     name: 'Pro', monthlyPrice: 99, yearlyPrice: 831, popular: true,
-    features: ['Unlimited AI strategies', 'Research analysis + live market data', 'AI image studio & video ads', 'Unlimited analytics uploads', 'Caption A/B variants', 'Priority support'],
+    features: ['20 AI strategies per month', 'Research analysis + live market data', 'AI image studio & video ads', 'Unlimited analytics uploads', 'Caption A/B variants', 'Priority support'],
   },
   {
     name: 'Agency', monthlyPrice: 299, yearlyPrice: 2511, popular: false,
-    features: ['Everything in Pro', 'Multi-brand workspaces', 'Team seats', 'White-label client reports', 'Public report sharing', 'Dedicated support'],
+    features: ['Everything in Pro', '75 AI strategies per month', 'Multi-brand workspaces', 'Team seats', 'White-label client reports', 'Dedicated support'],
     badge: 'Popular for agencies',
   },
 ];
@@ -377,7 +376,7 @@ const Index = () => {
               <div className="bg-card border border-[hsl(var(--primary)/0.3)] rounded-sm p-6 h-full">
                 <h3 className="text-lg font-bold mb-4 text-primary">Korex Algorithm</h3>
                 <ul className="space-y-3">
-                  {['Analyzes 47 engagement signals from YOUR data', 'Cross-platform pattern recognition', 'Audience behavior prediction', 'Platform-specific ranking optimization', 'Trained on $10M+ in ad spend analysis'].map((item, i) => (
+                  {['Scores every post against real factors measured from YOUR own posting history', 'Grounded in live competitor ad data and real search demand for your niche', 'Audience behavior prediction from your own engagement patterns', 'Platform-specific ranking optimization', 'A second AI pass reviews every plan before you see it'].map((item, i) => (
                     <li key={i} className="flex items-start gap-2 text-sm text-muted-foreground">
                       <Check className="w-4 h-4 text-primary shrink-0 mt-0.5" />{item}
                     </li>
@@ -457,39 +456,30 @@ const Index = () => {
       </section>
 
 
-      {/* =================== SOCIAL PROOF =================== */}
+      {/* =================== FOUNDER'S NOTE =================== */}
       <section className="py-24 px-4">
-        <div className="max-w-4xl mx-auto">
-          <AnimatedSection className="text-center mb-12">
-            <h2 className="text-3xl sm:text-[40px] font-semibold mb-4">
-              Built by Marketers, for Marketers
+        <div className="max-w-3xl mx-auto">
+          <AnimatedSection className="text-center mb-10">
+            <p className="eyebrow mb-4">A note from the founder</p>
+            <h2 className="text-3xl sm:text-[40px] font-semibold">
+              Why this exists
             </h2>
           </AnimatedSection>
 
-          <AnimatedSection>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-12">
-              {[
-                { icon: DollarSign, value: '$10M+', label: 'Ad spend analyzed' },
-                { icon: Users, value: '12', label: 'Industries covered' },
-                { icon: Globe, value: '8', label: 'Social platforms' },
-                { icon: Zap, value: '47', label: 'Engagement signals' },
-              ].map((stat, i) => (
-                <div key={i} className="bg-card border border-border rounded-sm p-5 text-center">
-                  <stat.icon className="w-5 h-5 text-primary mx-auto mb-2" />
-                  <p className="text-2xl font-semibold">{stat.value}</p>
-                  <p className="text-xs text-[hsl(var(--text-tertiary))] mt-1">{stat.label}</p>
-                </div>
-              ))}
-            </div>
-          </AnimatedSection>
-
-          <AnimatedSection delay={0.2}>
-            <div className="bg-card border border-[hsl(var(--primary)/0.2)] rounded-sm p-8 text-center">
-              <p className="text-xl sm:text-2xl italic text-muted-foreground mb-6 leading-relaxed">
-                "I spent six months studying what separates campaigns that work from campaigns that don't. Korex is that
-                analysis, turned into a system that runs it for your business."
+          <AnimatedSection delay={0.1}>
+            <div className="bg-card border border-border rounded-sm p-8">
+              <p className="text-lg text-foreground leading-relaxed mb-4">
+                Every agency quote I priced out started the same way — an opinion, dressed up as a strategy, for $3,000 to
+                $10,000 a month. Every AI tool I tried did the opposite problem: confident, fluent, and working entirely
+                from memory of what "usually" works.
               </p>
-              <p className="text-sm text-[hsl(var(--text-tertiary))]">— Founder, Korex Intelligence</p>
+              <p className="text-lg text-foreground leading-relaxed mb-6">
+                Korex is my attempt to fix both. Before it writes anything, it goes and looks — real search demand, the
+                ads your competitors are actually running right now, your own site and your own numbers. Then a second
+                model reviews the draft before you ever see it. I'm building this in the open, caps and limits included,
+                because I'd rather you know exactly what you're paying for than oversell it.
+              </p>
+              <p className="text-sm text-[hsl(var(--text-tertiary))]">— Christopher Snyder, Founder</p>
             </div>
           </AnimatedSection>
         </div>
@@ -672,9 +662,9 @@ const Index = () => {
         <div className="max-w-4xl mx-auto flex flex-wrap items-center justify-center gap-8 text-[hsl(var(--text-tertiary))]">
           {[
             { icon: Lock, label: 'Encrypted Data' },
-            { icon: Shield, label: 'SOC 2 Compliant' },
-            { icon: Globe, label: 'GDPR Ready' },
-            { icon: Award, label: '99.9% Uptime' },
+            { icon: Shield, label: 'SOC 2 Certified Infrastructure' },
+            { icon: CreditCard, label: 'Secure Payments via Stripe' },
+            { icon: Activity, label: '24/7 Health Monitoring' },
           ].map((badge, i) => (
             <div key={i} className="flex items-center gap-2 text-sm">
               <badge.icon className="w-4 h-4" /><span>{badge.label}</span>
