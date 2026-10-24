@@ -290,29 +290,20 @@ const Index = () => {
 
       {/* =================== EVIDENCE IN THE OUTPUT =================== */}
       <section className="py-20 px-4 bg-muted border-y border-border">
-        <div className="max-w-5xl mx-auto">
+        <div className="max-w-3xl mx-auto">
           <AnimatedSection className="text-center mb-12">
             <p className="eyebrow mb-4">What you actually see</p>
             <h2 className="text-3xl sm:text-[40px] font-semibold">
               Not a black box — the reasoning ships with the plan
             </h2>
           </AnimatedSection>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <AnimatedSection>
-              <ProductFrame
-                src="/screenshots/strategy-result.png"
-                alt="A generated Korex strategy result showing per-post evidence and audience-fit reasoning"
-              />
-              <p className="text-center text-sm text-muted-foreground mt-4">A generated strategy, with the evidence behind each post attached.</p>
-            </AnimatedSection>
-            <AnimatedSection delay={0.1}>
-              <ProductFrame
-                src="/screenshots/analytics-view.png"
-                alt="Korex analytics intelligence view scoring an uploaded platform export"
-              />
-              <p className="text-center text-sm text-muted-foreground mt-4">Analytics Intelligence scoring a real upload before it feeds the next plan.</p>
-            </AnimatedSection>
-          </div>
+          <AnimatedSection>
+            <ProductFrame
+              src="/screenshots/strategy-result.png"
+              alt="A generated Korex strategy result showing per-post reasoning and strategic approach"
+            />
+            <p className="text-center text-sm text-muted-foreground mt-4">A generated strategy, with the reasoning behind each post attached — not just a calendar.</p>
+          </AnimatedSection>
         </div>
       </section>
 
