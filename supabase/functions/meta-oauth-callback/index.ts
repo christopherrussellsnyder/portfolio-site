@@ -163,7 +163,8 @@ serve(async (req) => {
     const acctData = await acctRes.json();
     if (!acctRes.ok) {
       console.error("adaccounts fetch failed", acctData);
-      return appRedirect(redirectTo, { tab: "ads", meta: "error", reason: "no_ad_accounts" });
+      const apiMsg = acctData?.error?.message || "unknown error";
+      return appRedirect(redirectTo, { tab: "ads", meta: "error", reason: `api_error:${apiMsg}`.slice(0, 150) });
     }
     const accounts: any[] = acctData.data ?? [];
     if (!accounts.length) {

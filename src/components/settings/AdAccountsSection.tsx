@@ -73,9 +73,12 @@ export const AdAccountsSection: React.FC = () => {
       toast({ title: 'Ad account connected', description: 'Your Meta ad account is now linked. First sync may take a moment.' });
     } else if (meta === 'error') {
       const reason = searchParams.get('reason') || 'unknown';
+      const apiError = reason.startsWith('api_error:') ? reason.slice('api_error:'.length) : null;
       toast({
         title: 'Connection failed',
-        description: reason === 'no_ad_accounts'
+        description: apiError
+          ? `Meta rejected the ad account lookup: ${apiError}`
+          : reason === 'no_ad_accounts'
           ? 'No Meta ad accounts were found on that Facebook profile.'
           : 'Meta connection could not be completed. Please try again.',
         variant: 'destructive',
