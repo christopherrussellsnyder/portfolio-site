@@ -74,11 +74,15 @@ export function BrandKitSection() {
   };
 
   const uploadLogo = async (file: File) => {
-    if (!activeWorkspace) return;
+    if (!activeWorkspace || !user) return;
     setUploading(true);
     try {
       const ext = file.name.split('.').pop();
-      const path = `brand-kits/${activeWorkspace.id}/logo-${Date.now()}.${ext}`;
+      // The `media` bucket's storage RLS policy requires the path's first
+      // segment to be the uploader's own user id (see "Users can upload
+      // their own media" on storage.objects) -- it has no awareness of
+      // workspaces, so a workspace-led path is rejected for every user.
+      const path = `${user.id}/brand-kits/${activeWorkspace.id}/logo-${Date.now()}.${ext}`;
       const { error } = await supabase.storage.from('media').upload(path, file, { upsert: true });
       if (error) throw error;
       const { data } = supabase.storage.from('media').getPublicUrl(path);

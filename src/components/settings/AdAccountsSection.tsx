@@ -11,6 +11,7 @@ import {
   Plug, RefreshCw, Loader2, Unplug, AlertTriangle, Megaphone,
   TrendingUp, MousePointerClick, DollarSign, Eye,
 } from 'lucide-react';
+import { getFunctionErrorMessage } from '@/lib/edge-function-error';
 
 interface ConnectedAccount {
   id: string;
@@ -181,7 +182,7 @@ export const AdAccountsSection: React.FC = () => {
       const { data, error } = await supabase.functions.invoke('meta-oauth-callback', {
         body: { redirect_to: `${window.location.origin}/settings?tab=ads` },
       });
-      if (error) throw error;
+      if (error) throw new Error(await getFunctionErrorMessage(error, 'Meta OAuth is not configured yet.'));
       if (data?.url) {
         window.location.href = data.url;
         return;
