@@ -68,7 +68,7 @@ no frontend app-ID var, just the three backend secrets above.
 4. Under the Marketing API / Facebook Login for Business settings, add this
    exact Valid OAuth Redirect URI:
    `https://[project-id].supabase.co/functions/v1/meta-oauth-callback`
-5. Request/enable the `ads_read`, `read_insights`, and `business_management`
+5. Request/enable the `ads_read` and `business_management`
    permissions. Meta's App Review is only required once this needs to work
    for ad accounts you don't personally own/admin -- your own ad accounts
    work immediately in development mode.
