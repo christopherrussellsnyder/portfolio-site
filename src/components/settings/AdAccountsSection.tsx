@@ -11,6 +11,7 @@ import {
   Plug, RefreshCw, Loader2, Unplug, AlertTriangle, Megaphone,
   TrendingUp, MousePointerClick, DollarSign, Eye,
 } from 'lucide-react';
+import { getFunctionErrorMessage } from '@/lib/edge-function-error';
 
 interface ConnectedAccount {
   id: string;
@@ -72,9 +73,12 @@ export const AdAccountsSection: React.FC = () => {
       toast({ title: 'Ad account connected', description: 'Your Meta ad account is now linked. First sync may take a moment.' });
     } else if (meta === 'error') {
       const reason = searchParams.get('reason') || 'unknown';
+      const apiError = reason.startsWith('api_error:') ? reason.slice('api_error:'.length) : null;
       toast({
         title: 'Connection failed',
-        description: reason === 'no_ad_accounts'
+        description: apiError
+          ? `Meta rejected the ad account lookup: ${apiError}`
+          : reason === 'no_ad_accounts'
           ? 'No Meta ad accounts were found on that Facebook profile.'
           : 'Meta connection could not be completed. Please try again.',
         variant: 'destructive',
@@ -181,7 +185,7 @@ export const AdAccountsSection: React.FC = () => {
       const { data, error } = await supabase.functions.invoke('meta-oauth-callback', {
         body: { redirect_to: `${window.location.origin}/settings?tab=ads` },
       });
-      if (error) throw error;
+      if (error) throw new Error(await getFunctionErrorMessage(error, 'Meta OAuth is not configured yet.'));
       if (data?.url) {
         window.location.href = data.url;
         return;

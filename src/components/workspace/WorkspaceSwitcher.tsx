@@ -43,7 +43,7 @@ export function WorkspaceSwitcher({ compact = false, className = '' }: Props) {
   const [newName, setNewName] = useState('');
   const [creating, setCreating] = useState(false);
 
-  const isAgency = subscribed && tier === 'agency';
+  const isAgency = tier === 'founder' || (subscribed && tier === 'agency');
 
   if (!activeWorkspace) return null;
 

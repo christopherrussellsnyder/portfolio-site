@@ -1,16 +1,20 @@
 import { Link } from 'react-router-dom';
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { motion, useInView, AnimatePresence } from 'framer-motion';
 import {
-  Brain, BarChart3, ChevronDown,
+  ChevronDown,
   Check, X, ArrowRight, Shield,
-  Clock, DollarSign, Users, Zap,
-  Lock, Globe, Award,
-  Video, Search, Building2, FileBarChart, SplitSquareHorizontal,
-  Image as ImageIcon,
+  Clock, Lock,
+  CreditCard, Activity,
 } from 'lucide-react';
+import {
+  SignalIcon, ReadBusinessIcon, BuildPlanIcon, ReviewIcon,
+  StrategyEngineIcon, ResearchIcon, VideoAdsIcon, ImageStudioIcon,
+  CaptionVariantsIcon, WorkspacesIcon, ReportsIcon, AnalyticsIcon,
+} from '@/components/branding/CapabilityIcons';
 
 import { KorexLogoLockup } from '@/components/branding/KorexLogoLockup';
+import { ProductFrame } from '@/components/branding/ProductFrame';
 import { Seo } from '@/components/Seo';
 
 // --- Section wrapper ---
@@ -33,10 +37,10 @@ const painPoints = [
 ];
 
 const howItWorks = [
-  { icon: Search, title: 'We read the market', desc: 'Live search demand, competitor ads and community discussion in your niche are pulled in as evidence.' },
-  { icon: Globe, title: 'We read your business', desc: 'Your site is crawled and your uploaded analytics parsed, so the plan is grounded in your real offer and real numbers.' },
-  { icon: Brain, title: 'We build the plan', desc: 'Every post is written against platform ranking behaviour — hook, format, timing and campaign structure.' },
-  { icon: Shield, title: 'We review it before you see it', desc: 'A senior-strategist critic pass challenges weak angles and rewrites the plan before delivery.' },
+  { icon: SignalIcon, title: 'We read the market', desc: 'Live search demand, competitor ads and community discussion in your niche are pulled in as evidence.' },
+  { icon: ReadBusinessIcon, title: 'We read your business', desc: 'Your site is crawled and your uploaded analytics parsed, so the plan is grounded in your real offer and real numbers.' },
+  { icon: BuildPlanIcon, title: 'We build the plan', desc: 'Every post is written against platform ranking behaviour — hook, format, timing and campaign structure.' },
+  { icon: ReviewIcon, title: 'We review it before you see it', desc: 'A senior-strategist critic pass challenges weak angles and rewrites the plan before delivery.' },
 ];
 
 const comparisonData = [
@@ -70,24 +74,24 @@ const faqs = [
 const platforms = ['Instagram', 'Facebook', 'LinkedIn', 'TikTok', 'Twitter', 'YouTube', 'Pinterest', 'Google Ads', 'Shopify'];
 
 const capabilities = [
-  { icon: Brain, title: 'Live-Data Strategy Engine', desc: 'Real search demand, competitor ad recon, and community sentiment feed every plan — then a CMO-grade critic pass rewrites it before you see it.' },
-  { icon: Search, title: 'Research Analysis', desc: 'Industry trend reports and personalized market research for your exact niche.' },
-  { icon: Video, title: 'AI Video Ads', desc: 'Script, cast an AI actor and voice, render. Studio-grade UGC ads without a film crew.' },
-  { icon: ImageIcon, title: 'AI Image Studio', desc: 'Cinematic art direction plus flagship rendering for creative that looks art-directed.' },
-  { icon: SplitSquareHorizontal, title: 'Caption A/B Variants', desc: 'Multiple hook angles per post, scored for strength, so you test copy instead of guessing.' },
-  { icon: Building2, title: 'Multi-Brand Workspaces', desc: 'Run every brand or client side by side with isolated data and team seats.' },
-  { icon: FileBarChart, title: 'White-Label Reports', desc: 'Branded client exports and shareable public report links.' },
-  { icon: BarChart3, title: 'Analytics Intelligence', desc: 'Upload any platform export or screenshot — Korex scores it and feeds the wins back into your next strategy.' },
+  { icon: StrategyEngineIcon, title: 'Live-Data Strategy Engine', desc: 'Real search demand, competitor ad recon, and community sentiment feed every plan — then a CMO-grade critic pass rewrites it before you see it.' },
+  { icon: ResearchIcon, title: 'Research Analysis', desc: 'Industry trend reports and personalized market research for your exact niche.' },
+  { icon: VideoAdsIcon, title: 'AI Video Ads', desc: 'Script, cast an AI actor and voice, render. Studio-grade UGC ads without a film crew.' },
+  { icon: ImageStudioIcon, title: 'AI Image Studio', desc: 'Cinematic art direction plus flagship rendering for creative that looks art-directed.' },
+  { icon: CaptionVariantsIcon, title: 'Caption A/B Variants', desc: 'Multiple hook angles per post, scored for strength, so you test copy instead of guessing.' },
+  { icon: WorkspacesIcon, title: 'Multi-Brand Workspaces', desc: 'Run every brand or client side by side with isolated data and team seats.' },
+  { icon: ReportsIcon, title: 'White-Label Reports', desc: 'Branded client exports and shareable public report links.' },
+  { icon: AnalyticsIcon, title: 'Analytics Intelligence', desc: 'Upload any platform export or screenshot — Korex scores it and feeds the wins back into your next strategy.' },
 ];
 
 const pricing = [
   {
     name: 'Pro', monthlyPrice: 99, yearlyPrice: 831, popular: true,
-    features: ['Unlimited AI strategies', 'Research analysis + live market data', 'AI image studio & video ads', 'Unlimited analytics uploads', 'Caption A/B variants', 'Priority support'],
+    features: ['20 AI strategies per month', 'Research analysis + live market data', 'AI image studio & video ads', 'Unlimited analytics uploads', 'Caption A/B variants', 'Priority support'],
   },
   {
     name: 'Agency', monthlyPrice: 299, yearlyPrice: 2511, popular: false,
-    features: ['Everything in Pro', 'Multi-brand workspaces', 'Team seats', 'White-label client reports', 'Public report sharing', 'Dedicated support'],
+    features: ['Everything in Pro', '75 AI strategies per month', 'Multi-brand workspaces', 'Team seats', 'White-label client reports', 'Dedicated support'],
     badge: 'Popular for agencies',
   },
 ];
@@ -210,6 +214,18 @@ const Index = () => {
         </div>
       </section>
 
+      {/* =================== PRODUCT IN ACTION =================== */}
+      <section className="py-20 px-4">
+        <div className="max-w-5xl mx-auto">
+          <AnimatedSection>
+            <ProductFrame
+              src="/screenshots/dashboard-overview.png"
+              alt="Korex dashboard showing a workspace overview with live strategy status"
+            />
+          </AnimatedSection>
+        </div>
+      </section>
+
 
       {/* =================== THE PROBLEM =================== */}
       <section className="py-24 px-4 bg-muted">
@@ -249,21 +265,45 @@ const Index = () => {
             <p className="text-muted-foreground text-lg mt-4">Four stages run on every generation. Plain English, no jargon required.</p>
           </AnimatedSection>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          {/* A connected sequence, not four separate boxes -- the line is the
+              point: each stage feeds the next one. */}
+          <div className="flex flex-col lg:flex-row lg:items-start">
             {howItWorks.map((step, i) => (
-              <AnimatedSection key={i} delay={i * 0.1}>
-                <div className="bg-card border border-border rounded-sm p-6 text-center hover:border-[hsl(var(--primary)/0.5)] transition-all h-full">
-                  <div className="w-14 h-14 rounded-full bg-primary flex items-center justify-center mx-auto mb-4 text-white font-semibold text-lg shadow-[0_0_20px_hsl(var(--primary) / 0.3)]">
+              <Fragment key={i}>
+                {i > 0 && (
+                  <div className="hidden lg:block w-10 h-0.5 bg-[hsl(var(--primary)/0.35)] mt-7 shrink-0" />
+                )}
+                <AnimatedSection delay={i * 0.1} className="flex-1 text-center mb-10 lg:mb-0">
+                  <div className="w-14 h-14 rounded-full bg-primary flex items-center justify-center mx-auto mb-4 text-white font-semibold text-lg shadow-[0_0_20px_hsl(var(--primary)/0.3)]">
                     {i + 1}
                   </div>
-                  <step.icon className="w-6 h-6 text-primary mx-auto mb-3" />
+                  <step.icon className="w-7 h-7 mx-auto mb-3" />
                   <h3 className="text-lg font-bold mb-2">{step.title}</h3>
-                  <p className="text-muted-foreground text-sm">{step.desc}</p>
-                </div>
-              </AnimatedSection>
+                  <p className="text-muted-foreground text-sm px-2 lg:px-4">{step.desc}</p>
+                </AnimatedSection>
+              </Fragment>
             ))}
           </div>
 
+        </div>
+      </section>
+
+      {/* =================== EVIDENCE IN THE OUTPUT =================== */}
+      <section className="py-20 px-4 bg-muted border-y border-border">
+        <div className="max-w-3xl mx-auto">
+          <AnimatedSection className="text-center mb-12">
+            <p className="eyebrow mb-4">What you actually see</p>
+            <h2 className="text-3xl sm:text-[40px] font-semibold">
+              Not a black box — the reasoning ships with the plan
+            </h2>
+          </AnimatedSection>
+          <AnimatedSection>
+            <ProductFrame
+              src="/screenshots/strategy-result.png"
+              alt="A generated Korex strategy result showing per-post reasoning and strategic approach"
+            />
+            <p className="text-center text-sm text-muted-foreground mt-4">A generated strategy, with the reasoning behind each post attached — not just a calendar.</p>
+          </AnimatedSection>
         </div>
       </section>
 
@@ -287,7 +327,7 @@ const Index = () => {
               <AnimatedSection key={i} delay={(i % 4) * 0.08}>
                 <div className="p-8 h-full border-r border-b border-[hsl(var(--foreground)/0.1)] hover:bg-muted/60 transition-colors">
                   <span className="eyebrow block mb-6">{String(i + 1).padStart(2, '0')}</span>
-                  <c.icon className="w-5 h-5 text-primary mb-4" />
+                  <c.icon className="w-7 h-7 mb-4" />
                   <h3 className="font-semibold text-lg tracking-tight mb-3">{c.title}</h3>
                   <p className="text-muted-foreground text-sm leading-relaxed">{c.desc}</p>
                 </div>
@@ -377,7 +417,7 @@ const Index = () => {
               <div className="bg-card border border-[hsl(var(--primary)/0.3)] rounded-sm p-6 h-full">
                 <h3 className="text-lg font-bold mb-4 text-primary">Korex Algorithm</h3>
                 <ul className="space-y-3">
-                  {['Analyzes 47 engagement signals from YOUR data', 'Cross-platform pattern recognition', 'Audience behavior prediction', 'Platform-specific ranking optimization', 'Trained on $10M+ in ad spend analysis'].map((item, i) => (
+                  {['Scores every post against real factors measured from YOUR own posting history', 'Grounded in live competitor ad data and real search demand for your niche', 'Audience behavior prediction from your own engagement patterns', 'Platform-specific ranking optimization', 'A second AI pass reviews every plan before you see it'].map((item, i) => (
                     <li key={i} className="flex items-start gap-2 text-sm text-muted-foreground">
                       <Check className="w-4 h-4 text-primary shrink-0 mt-0.5" />{item}
                     </li>
@@ -417,32 +457,42 @@ const Index = () => {
             </p>
           </AnimatedSection>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {[
-              {
-                t: 'What it collects',
-                b: 'Search demand for your category, ads currently running by competitors, hooks and formats performing organically per platform, and how buyers describe the problem in their own words.',
-              },
-              {
-                t: 'How it gets it',
-                b: 'Live search and ad-library queries, platform-level content pattern extraction, community discussion mining, and a crawl of your own site for offer, pricing and positioning.',
-              },
-              {
-                t: 'How it is cleaned',
-                b: 'Raw signals are de-duplicated, scored for relevance to your niche and stripped of noise. Anything that cannot be tied back to a source is discarded rather than guessed.',
-              },
-              {
-                t: 'Why it stays current',
-                b: 'The intelligence layer refreshes on a rolling 24-hour cycle and is cached per niche, so every strategy and every ad script draws from the same fresh, shared evidence base.',
-              },
-            ].map((c, i) => (
-              <AnimatedSection key={c.t} delay={i * 0.08}>
-                <div className="bg-card border border-border rounded-sm p-6 h-full">
-                  <h3 className="font-bold mb-2">{c.t}</h3>
-                  <p className="text-muted-foreground text-sm leading-relaxed">{c.b}</p>
-                </div>
-              </AnimatedSection>
-            ))}
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+              {[
+                {
+                  t: 'What it collects',
+                  b: 'Search demand for your category, ads currently running by competitors, hooks and formats performing organically per platform, and how buyers describe the problem in their own words.',
+                },
+                {
+                  t: 'How it gets it',
+                  b: 'Live search and ad-library queries, platform-level content pattern extraction, community discussion mining, and a crawl of your own site for offer, pricing and positioning.',
+                },
+                {
+                  t: 'How it is cleaned',
+                  b: 'Raw signals are de-duplicated, scored for relevance to your niche and stripped of noise. Anything that cannot be tied back to a source is discarded rather than guessed.',
+                },
+                {
+                  t: 'Why it stays current',
+                  b: 'The intelligence layer refreshes on a rolling 24-hour cycle and is cached per niche, so every strategy and every ad script draws from the same fresh, shared evidence base.',
+                },
+              ].map((c, i) => (
+                <AnimatedSection key={c.t} delay={i * 0.08}>
+                  <div className="bg-card border border-border rounded-sm p-6 h-full">
+                    <h3 className="font-bold mb-2">{c.t}</h3>
+                    <p className="text-muted-foreground text-sm leading-relaxed">{c.b}</p>
+                  </div>
+                </AnimatedSection>
+              ))}
+            </div>
+
+            <AnimatedSection delay={0.2} className="hidden lg:block">
+              <img
+                src="/images/atmosphere-notebook.jpg"
+                alt=""
+                className="w-full h-full object-cover rounded-sm border border-border"
+              />
+            </AnimatedSection>
           </div>
 
           <AnimatedSection className="mt-8" delay={0.3}>
@@ -457,39 +507,38 @@ const Index = () => {
       </section>
 
 
-      {/* =================== SOCIAL PROOF =================== */}
-      <section className="py-24 px-4">
-        <div className="max-w-4xl mx-auto">
-          <AnimatedSection className="text-center mb-12">
-            <h2 className="text-3xl sm:text-[40px] font-semibold mb-4">
-              Built by Marketers, for Marketers
+      {/* =================== FOUNDER'S NOTE =================== */}
+      <section className="relative py-28 px-4 overflow-hidden">
+        <img
+          src="/images/atmosphere-desk.jpg"
+          alt=""
+          className="absolute inset-0 w-full h-full object-cover"
+        />
+        <div className="absolute inset-0 bg-[hsl(var(--background)/0.88)]" />
+        <div className="absolute inset-0 bg-gradient-to-t from-[hsl(var(--primary)/0.12)] to-transparent" />
+
+        <div className="relative max-w-3xl mx-auto">
+          <AnimatedSection className="text-center mb-10">
+            <p className="eyebrow mb-4">A note from the founder</p>
+            <h2 className="text-3xl sm:text-[40px] font-semibold">
+              Why this exists
             </h2>
           </AnimatedSection>
 
-          <AnimatedSection>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-12">
-              {[
-                { icon: DollarSign, value: '$10M+', label: 'Ad spend analyzed' },
-                { icon: Users, value: '12', label: 'Industries covered' },
-                { icon: Globe, value: '8', label: 'Social platforms' },
-                { icon: Zap, value: '47', label: 'Engagement signals' },
-              ].map((stat, i) => (
-                <div key={i} className="bg-card border border-border rounded-sm p-5 text-center">
-                  <stat.icon className="w-5 h-5 text-primary mx-auto mb-2" />
-                  <p className="text-2xl font-semibold">{stat.value}</p>
-                  <p className="text-xs text-[hsl(var(--text-tertiary))] mt-1">{stat.label}</p>
-                </div>
-              ))}
-            </div>
-          </AnimatedSection>
-
-          <AnimatedSection delay={0.2}>
-            <div className="bg-card border border-[hsl(var(--primary)/0.2)] rounded-sm p-8 text-center">
-              <p className="text-xl sm:text-2xl italic text-muted-foreground mb-6 leading-relaxed">
-                "I spent six months studying what separates campaigns that work from campaigns that don't. Korex is that
-                analysis, turned into a system that runs it for your business."
+          <AnimatedSection delay={0.1}>
+            <div className="bg-card/95 backdrop-blur-sm border border-border rounded-sm p-8">
+              <p className="text-lg text-foreground leading-relaxed mb-4">
+                Every agency quote I priced out started the same way — an opinion, dressed up as a strategy, for $3,000 to
+                $10,000 a month. Every AI tool I tried did the opposite problem: confident, fluent, and working entirely
+                from memory of what "usually" works.
               </p>
-              <p className="text-sm text-[hsl(var(--text-tertiary))]">— Founder, Korex Intelligence</p>
+              <p className="text-lg text-foreground leading-relaxed mb-6">
+                Korex is my attempt to fix both. Before it writes anything, it goes and looks — real search demand, the
+                ads your competitors are actually running right now, your own site and your own numbers. Then a second
+                model reviews the draft before you ever see it. I'm building this in the open, caps and limits included,
+                because I'd rather you know exactly what you're paying for than oversell it.
+              </p>
+              <p className="text-sm text-[hsl(var(--text-tertiary))]">— Christopher Snyder, Founder</p>
             </div>
           </AnimatedSection>
         </div>
@@ -672,9 +721,9 @@ const Index = () => {
         <div className="max-w-4xl mx-auto flex flex-wrap items-center justify-center gap-8 text-[hsl(var(--text-tertiary))]">
           {[
             { icon: Lock, label: 'Encrypted Data' },
-            { icon: Shield, label: 'SOC 2 Compliant' },
-            { icon: Globe, label: 'GDPR Ready' },
-            { icon: Award, label: '99.9% Uptime' },
+            { icon: Shield, label: 'SOC 2 Certified Infrastructure' },
+            { icon: CreditCard, label: 'Secure Payments via Stripe' },
+            { icon: Activity, label: '24/7 Health Monitoring' },
           ].map((badge, i) => (
             <div key={i} className="flex items-center gap-2 text-sm">
               <badge.icon className="w-4 h-4" /><span>{badge.label}</span>

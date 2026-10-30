@@ -14,7 +14,10 @@ import { checkRateLimit, clientKey } from "../_shared/rate-limit.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 
 const GRAPH = "https://graph.facebook.com/v19.0";
-const SCOPES = ["ads_read", "read_insights", "business_management"].join(",");
+// read_insights is a Page-insights permission, not a Marketing API one --
+// Meta's OAuth dialog rejects it outright ("Invalid Scopes: read_insights")
+// when requested here. ads_read already covers ad account insights.
+const SCOPES = ["ads_read", "business_management"].join(",");
 
 const META_APP_ID = Deno.env.get("META_APP_ID") ?? "";
 const META_APP_SECRET = Deno.env.get("META_APP_SECRET") ?? "";
@@ -160,7 +163,8 @@ serve(async (req) => {
     const acctData = await acctRes.json();
     if (!acctRes.ok) {
       console.error("adaccounts fetch failed", acctData);
-      return appRedirect(redirectTo, { tab: "ads", meta: "error", reason: "no_ad_accounts" });
+      const apiMsg = acctData?.error?.message || "unknown error";
+      return appRedirect(redirectTo, { tab: "ads", meta: "error", reason: `api_error:${apiMsg}`.slice(0, 150) });
     }
     const accounts: any[] = acctData.data ?? [];
     if (!accounts.length) {

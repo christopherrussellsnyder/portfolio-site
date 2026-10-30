@@ -31,8 +31,11 @@ ANTHROPIC_API_KEY=sk-ant-xxxxx
 STRIPE_SECRET_KEY=sk_test_xxxxx
 STRIPE_WEBHOOK_SECRET=whsec_xxxxx
 
-# Facebook/Instagram
-FACEBOOK_APP_SECRET=xxxxx
+# Meta (Facebook/Instagram) ad account connection -- the "Connect Ad
+# Account" feature in Settings. See the "Meta App" section below for setup.
+META_APP_ID=xxxxx
+META_APP_SECRET=xxxxx
+AD_TOKEN_ENCRYPTION_KEY=xxxxx
 
 # Sentry (for error monitoring)
 VITE_SENTRY_DSN=https://xxxxx@xxxxx.ingest.sentry.io/xxxxx
@@ -54,11 +57,26 @@ ALLOWED_ORIGINS=https://korexintelligencesystems.com,https://www.korexintelligen
 3. Add webhook endpoint: `https://[project-id].supabase.co/functions/v1/stripe-webhook`
 4. Copy API keys to Lovable Secrets
 
-#### Facebook App
-1. Create app at developers.facebook.com
-2. Add Facebook Login and Instagram Graph API products
-3. Configure OAuth redirect URIs
-4. Copy App ID and Secret to Lovable Secrets
+#### Meta App (powers "Connect Ad Account")
+The whole OAuth flow is server-side (`supabase/functions/meta-oauth-callback`
+and `fetch-meta-ad-performance`) -- there's no client-side Facebook SDK and
+no frontend app-ID var, just the three backend secrets above.
+1. Create an app at developers.facebook.com (type: Business).
+2. Add the "Marketing API" product.
+3. App Settings → Basic: copy the App ID and App Secret to `META_APP_ID` /
+   `META_APP_SECRET` in Lovable Secrets.
+4. Under the Marketing API / Facebook Login for Business settings, add this
+   exact Valid OAuth Redirect URI:
+   `https://[project-id].supabase.co/functions/v1/meta-oauth-callback`
+5. Request/enable the `ads_read` and `business_management`
+   permissions. Meta's App Review is only required once this needs to work
+   for ad accounts you don't personally own/admin -- your own ad accounts
+   work immediately in development mode.
+6. Separately, generate `AD_TOKEN_ENCRYPTION_KEY` with `openssl rand -base64
+   32` (unrelated to the Meta app itself -- it's the key connected accounts'
+   OAuth tokens are encrypted with before being stored). Set it once and
+   never rotate it after real accounts are connected: rotating it makes
+   every already-stored token undecryptable, forcing everyone to reconnect.
 
 #### Sentry (Error Monitoring)
 1. Create account at sentry.io
