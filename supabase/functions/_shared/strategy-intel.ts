@@ -73,6 +73,36 @@ function stripHtml(html: string): string {
     .trim();
 }
 
+// SEMrush's v3 Analytics API (the one `phrase_related`/`export_columns`
+// belong to) returns semicolon-delimited text with a header row, not JSON --
+// errors come back as plain text starting with "ERROR" rather than an HTTP
+// error status. Quoted fields (phrases containing a literal semicolon) are
+// handled; nothing else about the format needs more than a split.
+function parseSemrushCsv(text: string): Record<string, string>[] {
+  const lines = text.trim().split(/\r?\n/).filter(Boolean);
+  if (lines.length < 2) return [];
+  const splitLine = (line: string): string[] => {
+    const cells: string[] = [];
+    let cur = '';
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (ch === '"') { inQuotes = !inQuotes; continue; }
+      if (ch === ';' && !inQuotes) { cells.push(cur); cur = ''; continue; }
+      cur += ch;
+    }
+    cells.push(cur);
+    return cells;
+  };
+  const headers = splitLine(lines[0]);
+  return lines.slice(1).map((line) => {
+    const cells = splitLine(line);
+    const row: Record<string, string> = {};
+    headers.forEach((h, i) => { row[h] = cells[i] ?? ''; });
+    return row;
+  });
+}
+
 async function timedFetch(url: string, init: RequestInit = {}, ms = 9000): Promise<Response | null> {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), ms);
@@ -89,8 +119,10 @@ async function timedFetch(url: string, init: RequestInit = {}, ms = 9000): Promi
 // ------------------------------------------------ 1. search-demand (SERP) --
 
 /**
- * Live keyword / search-demand grounding via the Semrush connector gateway.
- * Requires the Semrush connection to be linked (SEMRUSH_API_KEY env var).
+ * Live keyword / search-demand grounding via SEMrush's v3 Analytics API,
+ * called directly (SEMRUSH_API_KEY env var -- no gateway/connector in front
+ * of it; the key goes in the query string, which is how this API version
+ * authenticates).
  */
 export async function fetchSearchDemand(
   supabase: any,
@@ -99,8 +131,7 @@ export async function fetchSearchDemand(
   geo: string,
 ): Promise<IntelResult> {
   const semrushKey = Deno.env.get('SEMRUSH_API_KEY');
-  const lovableKey = Deno.env.get('LOVABLE_API_KEY');
-  if (!semrushKey || !lovableKey) return EMPTY;
+  if (!semrushKey) return EMPTY;
 
   const seed = (products.split(',')[0] || niche).trim().slice(0, 60);
   const database = /uk|united kingdom/i.test(geo) ? 'uk' : /canada/i.test(geo) ? 'ca' : /australia/i.test(geo) ? 'au' : 'us';
@@ -109,18 +140,18 @@ export async function fetchSearchDemand(
   let rows: any = await getCached(supabase, 'search_demand', cacheKey);
   if (!rows) {
     const qs = new URLSearchParams({
+      type: 'phrase_related',
+      key: semrushKey,
       phrase: seed,
       database,
       export_columns: 'Ph,Nq,Cp,Co,Kd',
       display_limit: '15',
     });
-    const res = await timedFetch(
-      `https://connector-gateway.lovable.dev/semrush/keywords/phrase_related?${qs}`,
-      { headers: { Authorization: `Bearer ${lovableKey}`, 'X-Connection-Api-Key': semrushKey } },
-    );
+    const res = await timedFetch(`https://api.semrush.com/?${qs}`);
     if (!res || !res.ok) return EMPTY;
-    const json = await res.json().catch(() => null);
-    rows = json?.data?.rows || null;
+    const text = await res.text();
+    if (!text || text.startsWith('ERROR')) return EMPTY;
+    rows = parseSemrushCsv(text);
     if (!rows?.length) return EMPTY;
     // Keyword volumes move slowly — 14-day TTL is plenty and saves credits.
     await setCached(supabase, 'search_demand', cacheKey, rows, 24 * 14);
