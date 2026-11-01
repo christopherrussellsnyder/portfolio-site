@@ -1164,7 +1164,7 @@ serve(async (req) => {
     };
 
     pushSignals(siteIntel?.section, siteIntel?.source || 'crawl:unknown', 'real_api');
-    pushSignals(searchIntel?.section, searchIntel?.source || 'semrush', 'real_api');
+    pushSignals(searchIntel?.section, searchIntel?.source || 'dataforseo', 'real_api');
     pushSignals(adIntel?.section, adIntel?.source || 'meta-ad-library', 'real_api');
     pushSignals(vocIntel?.section, vocIntel?.source || 'reddit', 'real_api');
     pushSignals(performanceFeedbackSection, 'performance_feedback_loop', 'first_party');
