@@ -2,7 +2,12 @@ import { serviceClient, userClient } from "../_shared/supabase.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { sendResendEmail, EmailSendError } from "../_shared/resend.ts";
 
-const FROM_ADDRESS = "Korex Intelligence Systems <korexintelligencesystems@gmail.com>";
+// Resend can only send from a domain verified in your Resend account (SPF/
+// DKIM DNS records) -- it can't relay mail "from" an arbitrary Gmail
+// mailbox the way the old Gmail-API version of this function legitimately
+// could. korexintelligencesystems.com is the domain already verified and
+// proven working elsewhere (invite-workspace-member).
+const FROM_ADDRESS = "Korex Intelligence Systems <no-reply@korexintelligencesystems.com>";
 
 function toHtml(body: string): string {
   const escaped = body

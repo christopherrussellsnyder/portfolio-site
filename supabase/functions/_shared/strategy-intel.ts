@@ -168,9 +168,19 @@ export async function fetchSearchDemand(
         limit: 15,
       }]),
     });
-    if (!res || !res.ok) return EMPTY;
+    if (!res || !res.ok) {
+      console.warn('DataForSEO request failed', res?.status, await res?.text().catch(() => ''));
+      return EMPTY;
+    }
     const json = await res.json().catch(() => null);
-    if (!json || json.status_code !== 20000) return EMPTY;
+    // DataForSEO's own convention: the HTTP status is almost always 200 even
+    // on failure -- the real result is in the body's status_code (20000 =
+    // success; everything else, including bad credentials, is a 4xxxx/5xxxx
+    // here, not an HTTP error).
+    if (!json || json.status_code !== 20000) {
+      console.warn('DataForSEO task failed', json?.status_code, json?.status_message);
+      return EMPTY;
+    }
     rows = parseDataForSeoRelatedKeywords(json);
     if (!rows?.length) return EMPTY;
     // Keyword volumes move slowly — 14-day TTL is plenty and saves credits.
