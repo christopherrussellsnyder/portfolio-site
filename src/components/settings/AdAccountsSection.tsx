@@ -64,6 +64,7 @@ export const AdAccountsSection: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [connecting, setConnecting] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   // OAuth redirect landing feedback. The component already fetched accounts
   // once on mount -- before this connection existed -- so the toast alone
@@ -104,6 +105,9 @@ export const AdAccountsSection: React.FC = () => {
       .order('connected_at', { ascending: false });
     if (error) {
       console.error('failed to load ad accounts', error.message);
+      setLoadError(error.message);
+    } else {
+      setLoadError(null);
     }
     setAccounts((data as ConnectedAccount[]) ?? []);
   }, [user]);
@@ -256,6 +260,12 @@ export const AdAccountsSection: React.FC = () => {
                 <span className="font-medium">AI-estimated trend</span> — clearly labeled throughout the app.
                 Connecting unlocks real spend, CTR, CPC and ROAS pulled straight from Meta.
               </p>
+              {loadError && (
+                <p className="text-xs text-destructive flex items-center gap-1 pt-1">
+                  <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                  Couldn't load your connected accounts: {loadError}
+                </p>
+              )}
             </div>
           ) : (
             accounts.map((acct) => (
