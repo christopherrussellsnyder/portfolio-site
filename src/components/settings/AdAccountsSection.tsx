@@ -65,12 +65,16 @@ export const AdAccountsSection: React.FC = () => {
   const [connecting, setConnecting] = useState(false);
   const [syncing, setSyncing] = useState(false);
 
-  // OAuth redirect landing feedback.
+  // OAuth redirect landing feedback. The component already fetched accounts
+  // once on mount -- before this connection existed -- so the toast alone
+  // never put the newly-connected account on screen; it genuinely saved
+  // correctly server-side the whole time, the list just never refetched.
   useEffect(() => {
     const meta = searchParams.get('meta');
     if (!meta) return;
     if (meta === 'connected') {
       toast({ title: 'Ad account connected', description: 'Your Meta ad account is now linked. First sync may take a moment.' });
+      void loadAccounts();
     } else if (meta === 'error') {
       const reason = searchParams.get('reason') || 'unknown';
       const apiError = reason.startsWith('api_error:') ? reason.slice('api_error:'.length) : null;
@@ -88,6 +92,7 @@ export const AdAccountsSection: React.FC = () => {
     next.delete('meta');
     next.delete('reason');
     setSearchParams(next, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, setSearchParams, toast]);
 
   const loadAccounts = useCallback(async () => {
