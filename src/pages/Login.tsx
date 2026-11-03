@@ -3,10 +3,12 @@ import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 import { KorexLogoLockup } from '@/components/branding/KorexLogoLockup';
+import { Eye, EyeOff } from 'lucide-react';
 
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [failedAttempts, setFailedAttempts] = useState(0);
   const [lockoutUntil, setLockoutUntil] = useState<number | null>(null);
@@ -136,9 +138,19 @@ export default function Login() {
                 <label htmlFor="password" className="block text-sm font-medium text-muted-foreground">Password</label>
                 <Link to="/forgot-password" className="text-sm text-primary hover:text-korex-green-dark transition-colors">Forgot password?</Link>
               </div>
-              <input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6}
-                className="w-full bg-secondary border border-border rounded-lg px-4 py-3 text-foreground placeholder-muted-foreground focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/15 transition-all"
-                placeholder="••••••••" />
+              <div className="relative">
+                <input id="password" type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6}
+                  className="w-full bg-secondary border border-border rounded-lg px-4 py-3 pr-11 text-foreground placeholder-muted-foreground focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/15 transition-all"
+                  placeholder="••••••••" />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
             </div>
 
             <button type="submit" disabled={loading || (!!lockoutUntil && Date.now() < lockoutUntil)}

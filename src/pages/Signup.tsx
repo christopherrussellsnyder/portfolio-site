@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 import { KorexLogoLockup } from '@/components/branding/KorexLogoLockup';
+import { Eye, EyeOff } from 'lucide-react';
 
 const getPasswordStrength = (password: string): { label: string; color: string; width: string } => {
   let score = 0;
@@ -21,6 +22,8 @@ export default function Signup() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [showVerification, setShowVerification] = useState(false);
   const [resending, setResending] = useState(false);
@@ -129,9 +132,19 @@ export default function Signup() {
 
             <div>
               <label htmlFor="password" className="block text-sm font-medium text-muted-foreground mb-2">Password</label>
-              <input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8}
-                className="w-full bg-secondary border border-border rounded-lg px-4 py-3 text-foreground placeholder-muted-foreground focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/15 transition-all"
-                placeholder="At least 8 characters with 1 number" />
+              <div className="relative">
+                <input id="password" type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8}
+                  className="w-full bg-secondary border border-border rounded-lg px-4 py-3 pr-11 text-foreground placeholder-muted-foreground focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/15 transition-all"
+                  placeholder="At least 8 characters with 1 number" />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
               {password.length > 0 && (
                 <div className="mt-2">
                   <div className="h-1.5 bg-secondary rounded-full overflow-hidden">
@@ -146,9 +159,19 @@ export default function Signup() {
 
             <div>
               <label htmlFor="confirmPassword" className="block text-sm font-medium text-muted-foreground mb-2">Confirm Password</label>
-              <input id="confirmPassword" type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required minLength={8}
-                className="w-full bg-secondary border border-border rounded-lg px-4 py-3 text-foreground placeholder-muted-foreground focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/15 transition-all"
-                placeholder="Confirm your password" />
+              <div className="relative">
+                <input id="confirmPassword" type={showConfirmPassword ? 'text' : 'password'} value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required minLength={8}
+                  className="w-full bg-secondary border border-border rounded-lg px-4 py-3 pr-11 text-foreground placeholder-muted-foreground focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/15 transition-all"
+                  placeholder="Confirm your password" />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
             </div>
 
             <button type="submit" disabled={loading}
