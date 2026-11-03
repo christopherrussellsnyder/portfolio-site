@@ -2,15 +2,13 @@ export const STRIPE_TIERS = {
   pro: {
     name: 'Pro',
     monthly: {
-      // TEST MODE price/product, created for the first end-to-end checkout
-      // test -- swap to the live-mode IDs before real launch.
-      price_id: 'price_1UXkqY2L0QxUPUo7vJqhR6Cl',
-      product_id: 'prod_VYsbYD5nvAOleS',
+      price_id: 'price_1UXlJXRqQfcik3t88ZpjRvTL',
+      product_id: 'prod_VYt5CjLBpTePqD',
       price: 99,
     },
     yearly: {
-      price_id: 'price_1U1YHXL7HyckspfcTI9T3cWH',
-      product_id: 'prod_UuPsofAJQj79gO',
+      price_id: 'price_1UXlKARqQfcik3t8UqjW5lfA',
+      product_id: 'prod_VYt6dCVnbWXMqE',
       price: 831,
     },
     // Enforced server-side in generate-strategy/index.ts -- keep these two
@@ -20,13 +18,13 @@ export const STRIPE_TIERS = {
   agency: {
     name: 'Agency',
     monthly: {
-      price_id: 'price_1U1YAIL7HyckspfcyT4yah1y',
-      product_id: 'prod_UuPsM90xu8d47e',
+      price_id: 'price_1UXlKVRqQfcik3t8CfTZlZqo',
+      product_id: 'prod_VYt6bNaQcpp2g8',
       price: 299,
     },
     yearly: {
-      price_id: 'price_1U1YHqL7HyckspfcXu9IV3Bk',
-      product_id: 'prod_UuPtrGta7sU60Q',
+      price_id: 'price_1UXlLDRqQfcik3t8WOGW61w8',
+      product_id: 'prod_VYt7EJtr1KRDeR',
       price: 2511,
     },
     strategies_limit: 75,
@@ -44,16 +42,10 @@ export const TRIAL_STRATEGY_LIMIT = STARTER_STRATEGY_LIMIT;
 // frontend caller, but a stale version here would mislabel legacy
 // subscribers' tier if something ever reads it for display.
 export const PRODUCT_TO_TIER: Record<string, string> = {
-  // Current live products
-  'prod_VYsbYD5nvAOleS': 'pro', // TEST MODE -- swap to live-mode product before launch
-  'prod_UuPsofAJQj79gO': 'pro',
-  'prod_UuPsM90xu8d47e': 'agency',
-  'prod_UuPtrGta7sU60Q': 'agency',
-  // Historical products retained for existing subscriptions
-  'prod_UJLxjx4LDdH1Ps': 'pro',
-  'prod_UJLxyYaqUCGjHg': 'pro',
-  'prod_UJLyj76FsosYjb': 'agency',
-  'prod_UJLyrKQhr9PclL': 'agency',
+  'prod_VYt5CjLBpTePqD': 'pro',
+  'prod_VYt6dCVnbWXMqE': 'pro',
+  'prod_VYt6bNaQcpp2g8': 'agency',
+  'prod_VYt7EJtr1KRDeR': 'agency',
 };
 
 export type SubscriptionTier = 'pro' | 'agency' | null;

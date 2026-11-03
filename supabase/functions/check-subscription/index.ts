@@ -6,16 +6,10 @@ import { checkRateLimit, clientKey } from "../_shared/rate-limit.ts";
 import { isFounderEmail } from "../_shared/founder.ts";
 
 const PRODUCT_TO_TIER: Record<string, string> = {
-  // Current live products
-  "prod_VYsbYD5nvAOleS": "pro", // TEST MODE -- swap to live-mode product before launch
-  "prod_UuPsofAJQj79gO": "pro",
-  "prod_UuPsM90xu8d47e": "agency",
-  "prod_UuPtrGta7sU60Q": "agency",
-  // Historical products retained for existing subscriptions
-  "prod_UJLxjx4LDdH1Ps": "pro",
-  "prod_UJLxyYaqUCGjHg": "pro",
-  "prod_UJLyj76FsosYjb": "agency",
-  "prod_UJLyrKQhr9PclL": "agency",
+  "prod_VYt5CjLBpTePqD": "pro",
+  "prod_VYt6dCVnbWXMqE": "pro",
+  "prod_VYt6bNaQcpp2g8": "agency",
+  "prod_VYt7EJtr1KRDeR": "agency",
 };
 
 // Cache Stripe reads for 15 min — subscription state rarely changes minute-to-minute.

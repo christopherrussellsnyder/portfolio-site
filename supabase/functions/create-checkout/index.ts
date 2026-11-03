@@ -40,12 +40,12 @@ serve(async (req) => {
     if (!priceId) throw new Error("Price ID is required");
 
     const MONTHLY_PRICE_IDS = new Set([
-      "price_1UXkqY2L0QxUPUo7vJqhR6Cl", // Pro monthly -- TEST MODE, swap to live before launch
-      "price_1U1YAIL7HyckspfcyT4yah1y", // Agency monthly
+      "price_1UXlJXRqQfcik3t88ZpjRvTL", // Pro monthly
+      "price_1UXlKVRqQfcik3t8CfTZlZqo", // Agency monthly
     ]);
     const YEARLY_PRICE_IDS = new Set([
-      "price_1U1YHXL7HyckspfcTI9T3cWH", // Pro yearly
-      "price_1U1YHqL7HyckspfcXu9IV3Bk", // Agency yearly
+      "price_1UXlKARqQfcik3t8UqjW5lfA", // Pro yearly
+      "price_1UXlLDRqQfcik3t8WOGW61w8", // Agency yearly
     ]);
     if (!MONTHLY_PRICE_IDS.has(priceId) && !YEARLY_PRICE_IDS.has(priceId)) {
       throw new Error("Invalid price ID");
