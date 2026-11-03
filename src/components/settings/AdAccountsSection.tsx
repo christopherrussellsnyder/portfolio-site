@@ -11,6 +11,7 @@ import {
   Plug, RefreshCw, Loader2, Unplug, AlertTriangle, Megaphone,
   TrendingUp, MousePointerClick, DollarSign, Eye,
 } from 'lucide-react';
+import { getFunctionErrorMessage } from '@/lib/edge-function-error';
 
 interface ConnectedAccount {
   id: string;
@@ -63,18 +64,26 @@ export const AdAccountsSection: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [connecting, setConnecting] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
-  // OAuth redirect landing feedback.
+  // OAuth redirect landing feedback. The component already fetched accounts
+  // once on mount -- before this connection existed -- so the toast alone
+  // never put the newly-connected account on screen; it genuinely saved
+  // correctly server-side the whole time, the list just never refetched.
   useEffect(() => {
     const meta = searchParams.get('meta');
     if (!meta) return;
     if (meta === 'connected') {
       toast({ title: 'Ad account connected', description: 'Your Meta ad account is now linked. First sync may take a moment.' });
+      void loadAccounts();
     } else if (meta === 'error') {
       const reason = searchParams.get('reason') || 'unknown';
+      const apiError = reason.startsWith('api_error:') ? reason.slice('api_error:'.length) : null;
       toast({
         title: 'Connection failed',
-        description: reason === 'no_ad_accounts'
+        description: apiError
+          ? `Meta rejected the ad account lookup: ${apiError}`
+          : reason === 'no_ad_accounts'
           ? 'No Meta ad accounts were found on that Facebook profile.'
           : 'Meta connection could not be completed. Please try again.',
         variant: 'destructive',
@@ -84,6 +93,7 @@ export const AdAccountsSection: React.FC = () => {
     next.delete('meta');
     next.delete('reason');
     setSearchParams(next, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, setSearchParams, toast]);
 
   const loadAccounts = useCallback(async () => {
@@ -95,6 +105,9 @@ export const AdAccountsSection: React.FC = () => {
       .order('connected_at', { ascending: false });
     if (error) {
       console.error('failed to load ad accounts', error.message);
+      setLoadError(error.message);
+    } else {
+      setLoadError(null);
     }
     setAccounts((data as ConnectedAccount[]) ?? []);
   }, [user]);
@@ -181,7 +194,7 @@ export const AdAccountsSection: React.FC = () => {
       const { data, error } = await supabase.functions.invoke('meta-oauth-callback', {
         body: { redirect_to: `${window.location.origin}/settings?tab=ads` },
       });
-      if (error) throw error;
+      if (error) throw new Error(await getFunctionErrorMessage(error, 'Meta OAuth is not configured yet.'));
       if (data?.url) {
         window.location.href = data.url;
         return;
@@ -247,6 +260,12 @@ export const AdAccountsSection: React.FC = () => {
                 <span className="font-medium">AI-estimated trend</span> — clearly labeled throughout the app.
                 Connecting unlocks real spend, CTR, CPC and ROAS pulled straight from Meta.
               </p>
+              {loadError && (
+                <p className="text-xs text-destructive flex items-center gap-1 pt-1">
+                  <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                  Couldn't load your connected accounts: {loadError}
+                </p>
+              )}
             </div>
           ) : (
             accounts.map((acct) => (

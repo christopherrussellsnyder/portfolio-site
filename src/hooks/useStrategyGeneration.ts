@@ -128,6 +128,14 @@ export interface StrategicRationale {
   arc_positioning?: string;
   builds_toward?: string;
   success_metrics?: string;
+  /** Which specific audience trait/pain point this post addresses and how --
+   *  from the critic pass's audience_resonance grading. */
+  audience_fit?: string;
+  /** The CMO critic pass's verdict and one-sentence reasoning for this post. */
+  critic_verdict?: 'keep' | 'rewrite';
+  critic_note?: string;
+  /** True if the critic's verdict led to an actual rewrite of this post. */
+  critic_rewritten?: boolean;
 }
 
 export interface OptimizationTips {

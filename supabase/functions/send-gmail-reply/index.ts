@@ -1,35 +1,20 @@
 import { serviceClient, userClient } from "../_shared/supabase.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { sendResendEmail, EmailSendError } from "../_shared/resend.ts";
 
-const GATEWAY = 'https://connector-gateway.lovable.dev/google_mail/gmail/v1';
+// Resend can only send from a domain verified in your Resend account (SPF/
+// DKIM DNS records) -- it can't relay mail "from" an arbitrary Gmail
+// mailbox the way the old Gmail-API version of this function legitimately
+// could. korexintelligencesystems.com is the domain already verified and
+// proven working elsewhere (invite-workspace-member).
+const FROM_ADDRESS = "Korex Intelligence Systems <no-reply@korexintelligencesystems.com>";
 
-function encodeBase64Url(str: string): string {
-  const bytes = new TextEncoder().encode(str);
-  let bin = '';
-  bytes.forEach((b) => (bin += String.fromCharCode(b)));
-  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
-
-function buildRawEmail(opts: {
-  fromName: string;
-  fromEmail: string;
-  to: string;
-  subject: string;
-  body: string;
-  inReplyTo?: string | null;
-  references?: string | null;
-}) {
-  const headers = [
-    `From: ${opts.fromName} <${opts.fromEmail}>`,
-    `To: ${opts.to}`,
-    `Subject: ${opts.subject}`,
-    'MIME-Version: 1.0',
-    'Content-Type: text/plain; charset="UTF-8"',
-    'Content-Transfer-Encoding: 7bit',
-  ];
-  if (opts.inReplyTo) headers.push(`In-Reply-To: ${opts.inReplyTo}`);
-  if (opts.references) headers.push(`References: ${opts.references}`);
-  return encodeBase64Url(headers.join('\r\n') + '\r\n\r\n' + opts.body);
+function toHtml(body: string): string {
+  const escaped = body
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+  return `<div style="font-family:Inter,system-ui,sans-serif;white-space:pre-wrap;line-height:1.5;color:#1a1a1a">${escaped}</div>`;
 }
 
 Deno.serve(async (req) => {
@@ -37,10 +22,9 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   try {
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    const GOOGLE_MAIL_API_KEY = Deno.env.get('GOOGLE_MAIL_API_KEY');
-    if (!LOVABLE_API_KEY || !GOOGLE_MAIL_API_KEY) {
-      return new Response(JSON.stringify({ error: 'Gmail connector not configured' }), {
+    const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY');
+    if (!RESEND_API_KEY) {
+      return new Response(JSON.stringify({ error: 'RESEND_API_KEY not configured' }), {
         status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
@@ -83,29 +67,25 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Not a native Gmail-thread reply (no Gmail API involved anymore) --
+    // the "Re:" subject is what most mail clients group on without a real
+    // Message-ID to reference, since the inbound submission came through our
+    // own contact form, not through Gmail.
     const subject = subjectOverride || `Re: ${sub.subject || 'Your message to Korex Intelligence'}`;
-    const raw = buildRawEmail({
-      fromName: 'Korex Intelligence Systems',
-      fromEmail: 'korexintelligencesystems@gmail.com',
-      to: sub.email,
-      subject,
-      body: replyBody,
-    });
 
-    const gmailRes = await fetch(`${GATEWAY}/users/me/messages/send`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-        'X-Connection-Api-Key': GOOGLE_MAIL_API_KEY,
-      },
-      body: JSON.stringify({ raw }),
-    });
-
-    const gmailJson = await gmailRes.json();
-    if (!gmailRes.ok) {
-      console.error('Gmail send failed', gmailRes.status, gmailJson);
-      return new Response(JSON.stringify({ error: 'Gmail send failed', details: gmailJson }), {
+    let sendResult: { id: string };
+    try {
+      sendResult = await sendResendEmail(RESEND_API_KEY, {
+        from: FROM_ADDRESS,
+        to: sub.email,
+        subject,
+        html: toHtml(replyBody),
+        text: replyBody,
+      });
+    } catch (e) {
+      const msg = e instanceof EmailSendError ? e.message : (e instanceof Error ? e.message : 'Unknown error');
+      console.error('Resend send failed', msg);
+      return new Response(JSON.stringify({ error: 'Email send failed', details: msg }), {
         status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
@@ -115,11 +95,10 @@ Deno.serve(async (req) => {
       replied_at: new Date().toISOString(),
       reply_body: replyBody,
       replied_by: user.id,
-      gmail_message_id: gmailJson.id ?? null,
-      gmail_thread_id: gmailJson.threadId ?? null,
+      gmail_message_id: sendResult.id ?? null,
     }).eq('id', submissionId);
 
-    return new Response(JSON.stringify({ success: true, id: gmailJson.id }), {
+    return new Response(JSON.stringify({ success: true, id: sendResult.id }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (e) {

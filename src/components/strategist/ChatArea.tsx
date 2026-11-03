@@ -46,6 +46,10 @@ interface ChatAreaProps {
   onConversationCreated: (id: string) => void;
   onContextUpdate: () => void;
   className?: string;
+  /** A question to auto-send on mount, e.g. from an "Explore Further" link. */
+  initialPrompt?: string;
+  /** Called once initialPrompt has been sent, so the caller can clear it. */
+  onInitialPromptConsumed?: () => void;
 }
 
 interface ContextPreferences {
@@ -61,6 +65,8 @@ export function ChatArea({
   onConversationCreated,
   onContextUpdate,
   className,
+  initialPrompt,
+  onInitialPromptConsumed,
 }: ChatAreaProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -80,7 +86,8 @@ export function ChatArea({
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  
+  const initialPromptFiredRef = useRef(false);
+
   const { uploadScreenshot, analyzeFile, isProcessing } = useScreenshotAnalysis();
   const { generateStrategy, isGenerating } = useStrategyGeneration();
   const navigate = useNavigate();
@@ -102,6 +109,18 @@ export function ChatArea({
       setMessages([]);
     }
   }, [conversationId]);
+
+  // Auto-send a question handed off from elsewhere (e.g. an "Explore
+  // Further" link on the Insights page) -- only for a fresh chat, and only
+  // once, so it doesn't re-fire on re-renders or when reopening an old
+  // conversation.
+  useEffect(() => {
+    if (!initialPrompt || conversationId || initialPromptFiredRef.current) return;
+    initialPromptFiredRef.current = true;
+    setTimeout(() => sendMessage(initialPrompt), 100);
+    onInitialPromptConsumed?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialPrompt, conversationId]);
 
   // Check if user has strategies and settings completeness
   useEffect(() => {

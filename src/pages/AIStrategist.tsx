@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Helmet } from 'react-helmet-async';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Settings } from 'lucide-react';
 import { ConversationSidebar } from '@/components/strategist/ConversationSidebar';
 import { ChatArea } from '@/components/strategist/ChatArea';
@@ -66,6 +66,8 @@ export default function AIStrategist() {
   const [isDeleting, setIsDeleting] = useState(false);
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const location = useLocation();
+  const prefillMessage = (location.state as { prefillMessage?: string } | null)?.prefillMessage;
 
   // Fetch conversations
   const { data: conversations = [], isLoading: conversationsLoading } = useQuery({
@@ -249,6 +251,8 @@ export default function AIStrategist() {
           onConversationCreated={handleConversationCreated}
           onContextUpdate={handleContextUpdate}
           className="flex-1"
+          initialPrompt={prefillMessage}
+          onInitialPromptConsumed={() => navigate(location.pathname, { replace: true, state: {} })}
         />
 
         {/* Right Sidebar - Context */}

@@ -73,6 +73,42 @@ function stripHtml(html: string): string {
     .trim();
 }
 
+// DataForSEO Labs' Related Keywords response nests each result's metrics a
+// couple of levels deep, and the exact field names aren't fully confirmed
+// against a live call from this environment (no network access to verify).
+// This checks the documented/most-likely path first, then a couple of
+// plausible fallbacks, and logs the raw shape once on total failure so the
+// real structure is visible in Supabase logs if every path misses --
+// matching the fail-soft, never-fabricate approach the rest of this file
+// already uses, and making a wrong guess here easy to diagnose and fix.
+function parseDataForSeoRelatedKeywords(json: any): Record<string, string>[] {
+  const items: any[] = json?.tasks?.[0]?.result?.[0]?.items ?? [];
+  if (!items.length) return [];
+
+  const rows = items.map((item: any) => {
+    const kd = item?.keyword_data ?? item;
+    const info = kd?.keyword_info ?? kd;
+    const props = kd?.keyword_properties ?? item?.keyword_properties;
+    const keyword = kd?.keyword ?? item?.keyword ?? '';
+    const volume = info?.search_volume ?? item?.search_volume;
+    const cpc = info?.cpc ?? item?.cpc;
+    const competition = info?.competition ?? info?.competition_level ?? item?.competition;
+    const difficulty = props?.keyword_difficulty ?? item?.keyword_difficulty;
+    return {
+      Ph: String(keyword),
+      Nq: volume != null ? String(volume) : 'n/a',
+      Cp: cpc != null ? String(cpc) : 'n/a',
+      Co: competition != null ? String(competition) : 'n/a',
+      Kd: difficulty != null ? String(difficulty) : 'n/a',
+    };
+  }).filter((r) => r.Ph);
+
+  if (!rows.length) {
+    console.warn('DataForSEO related-keywords: no rows parsed from response shape', JSON.stringify(json).slice(0, 1000));
+  }
+  return rows;
+}
+
 async function timedFetch(url: string, init: RequestInit = {}, ms = 9000): Promise<Response | null> {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), ms);
@@ -88,9 +124,21 @@ async function timedFetch(url: string, init: RequestInit = {}, ms = 9000): Promi
 
 // ------------------------------------------------ 1. search-demand (SERP) --
 
+// Stable Google Ads geotargeting location criteria IDs -- these are the
+// numeric codes DataForSEO's API expects (not the "us"/"uk" strings
+// SEMrush's older API used).
+const DATAFORSEO_LOCATION_CODES: Record<string, number> = {
+  uk: 2826,
+  ca: 2124,
+  au: 2036,
+  us: 2840,
+};
+
 /**
- * Live keyword / search-demand grounding via the Semrush connector gateway.
- * Requires the Semrush connection to be linked (SEMRUSH_API_KEY env var).
+ * Live keyword / search-demand grounding via DataForSEO Labs' Related
+ * Keywords API, called directly. Auth is HTTP Basic with an API login +
+ * password pair from the DataForSEO dashboard (API Access page) -- not a
+ * single bearer key, and not your dashboard login.
  */
 export async function fetchSearchDemand(
   supabase: any,
@@ -98,9 +146,9 @@ export async function fetchSearchDemand(
   products: string,
   geo: string,
 ): Promise<IntelResult> {
-  const semrushKey = Deno.env.get('SEMRUSH_API_KEY');
-  const lovableKey = Deno.env.get('LOVABLE_API_KEY');
-  if (!semrushKey || !lovableKey) return EMPTY;
+  const login = Deno.env.get('DATAFORSEO_LOGIN');
+  const password = Deno.env.get('DATAFORSEO_PASSWORD');
+  if (!login || !password) return EMPTY;
 
   const seed = (products.split(',')[0] || niche).trim().slice(0, 60);
   const database = /uk|united kingdom/i.test(geo) ? 'uk' : /canada/i.test(geo) ? 'ca' : /australia/i.test(geo) ? 'au' : 'us';
@@ -108,19 +156,32 @@ export async function fetchSearchDemand(
 
   let rows: any = await getCached(supabase, 'search_demand', cacheKey);
   if (!rows) {
-    const qs = new URLSearchParams({
-      phrase: seed,
-      database,
-      export_columns: 'Ph,Nq,Cp,Co,Kd',
-      display_limit: '15',
+    const auth = btoa(`${login}:${password}`);
+    const res = await timedFetch('https://api.dataforseo.com/v3/dataforseo_labs/google/related_keywords/live', {
+      method: 'POST',
+      headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify([{
+        keyword: seed,
+        location_code: DATAFORSEO_LOCATION_CODES[database],
+        language_code: 'en',
+        depth: 1,
+        limit: 15,
+      }]),
     });
-    const res = await timedFetch(
-      `https://connector-gateway.lovable.dev/semrush/keywords/phrase_related?${qs}`,
-      { headers: { Authorization: `Bearer ${lovableKey}`, 'X-Connection-Api-Key': semrushKey } },
-    );
-    if (!res || !res.ok) return EMPTY;
+    if (!res || !res.ok) {
+      console.warn('DataForSEO request failed', res?.status, await res?.text().catch(() => ''));
+      return EMPTY;
+    }
     const json = await res.json().catch(() => null);
-    rows = json?.data?.rows || null;
+    // DataForSEO's own convention: the HTTP status is almost always 200 even
+    // on failure -- the real result is in the body's status_code (20000 =
+    // success; everything else, including bad credentials, is a 4xxxx/5xxxx
+    // here, not an HTTP error).
+    if (!json || json.status_code !== 20000) {
+      console.warn('DataForSEO task failed', json?.status_code, json?.status_message);
+      return EMPTY;
+    }
+    rows = parseDataForSeoRelatedKeywords(json);
     if (!rows?.length) return EMPTY;
     // Keyword volumes move slowly — 14-day TTL is plenty and saves credits.
     await setCached(supabase, 'search_demand', cacheKey, rows, 24 * 14);
@@ -133,7 +194,7 @@ export async function fetchSearchDemand(
 
   return {
     ok: true,
-    source: `semrush:${database}`,
+    source: `dataforseo:${database}`,
     section: `=== LIVE SEARCH DEMAND (REAL DATA — GROUND HOOKS IN THESE) ===
 These are actual monthly search volumes in the ${database.toUpperCase()} market for this niche:
 ${lines.join('\n')}

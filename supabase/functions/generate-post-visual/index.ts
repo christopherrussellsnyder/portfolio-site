@@ -182,18 +182,22 @@ Deno.serve(async (req) => {
     const gate = await requirePro(req);
     if (gate instanceof Response) return gate;
 
-    // Two separate providers: LOVABLE_API_KEY is required -- it authenticates
-    // the actual image-generation call below (Claude has no image model, so
-    // this stays on Lovable's image gateway). ANTHROPIC_API_KEY is optional --
-    // it only powers the brief-enhancement text step, which already fails
-    // soft to the raw prompt on any error (see enhanceBrief).
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      return new Response(JSON.stringify({ error: "LOVABLE_API_KEY not configured" }), {
+    // Two independent providers, called directly (no Lovable gateway):
+    // OPENAI_API_KEY is always required -- it's the default image model.
+    // GEMINI_API_KEY is required only when a product-screen reference image
+    // is supplied, since compositing a real UI into a generated scene needs
+    // a multimodal image-in/image-out model (OpenAI's generations endpoint
+    // is text-prompt-only). ANTHROPIC_API_KEY is optional -- it only powers
+    // the brief-enhancement text step, which already fails soft to the raw
+    // prompt on any error (see enhanceBrief).
+    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+    if (!OPENAI_API_KEY) {
+      return new Response(JSON.stringify({ error: "OPENAI_API_KEY not configured" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
     const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
 
     // Auth: get user from JWT
@@ -214,7 +218,7 @@ Deno.serve(async (req) => {
       caption, hook, theme, postType, platform,
       visualDescription, colorPalette, textOverlay,
       brandColors, brandVoice, stylePrompt,
-      model = "openai/gpt-image-2",
+      model = "gpt-image-1",
       quality = "high",
       enhance = true,
       referenceImage,
@@ -237,6 +241,13 @@ Deno.serve(async (req) => {
       });
     }
 
+    if (productReference && !GEMINI_API_KEY) {
+      return new Response(JSON.stringify({ error: "GEMINI_API_KEY not configured -- required for generating visuals with a product-screen reference" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const basePrompt = buildPrompt({
       caption, hook, theme, postType, platform,
       visualDescription, colorPalette, textOverlay,
@@ -251,65 +262,82 @@ Deno.serve(async (req) => {
       ? await enhanceBrief(basePrompt, ANTHROPIC_API_KEY)
       : basePrompt;
 
-    // Body shape depends on the vendor: OpenAI image models take `prompt`,
-    // Gemini image models take chat-style `messages` + `modalities`.
-    // Product references use Gemini's multimodal image-generation body. The
-    // OpenAI generations endpoint is text-only; its edit route is multipart.
-    const selectedModel = productReference ? "google/gemini-3-pro-image" : String(model);
-    const isGemini = selectedModel.startsWith("google/");
-    const geminiContent = productReference
-      ? [
-          { type: "text", text: prompt },
-          { type: "image_url", image_url: { url: productReference } },
-        ]
-      : prompt;
-    const requestBody = isGemini
-      ? {
-          model: selectedModel,
-          messages: [{ role: "user", content: geminiContent }],
-          modalities: ["image", "text"],
+    // A product-screen reference needs a multimodal image-in/image-out model
+    // (Gemini); everything else uses OpenAI's text-to-image endpoint directly.
+    // Each provider has its own request shape and auth, so these are two
+    // separate calls rather than one body shape branching on a vendor prefix.
+    const useGemini = Boolean(productReference);
+    const selectedModel = useGemini
+      ? (Deno.env.get("GEMINI_IMAGE_MODEL") || "gemini-2.5-flash-image-preview")
+      : String(model);
+
+    let b64: string | undefined;
+
+    if (useGemini) {
+      const refMatch = /^data:([^;]+);base64,([\s\S]+)$/.exec(productReference!);
+      const geminiRes = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:generateContent`,
+        {
+          method: "POST",
+          headers: {
+            "x-goog-api-key": GEMINI_API_KEY!,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            contents: [{
+              role: "user",
+              parts: [
+                { text: prompt },
+                { inlineData: { mimeType: refMatch?.[1] || "image/png", data: refMatch?.[2] || "" } },
+              ],
+            }],
+            generationConfig: { responseModalities: ["IMAGE", "TEXT"] },
+          }),
+        },
+      );
+      if (!geminiRes.ok) {
+        const errText = await geminiRes.text();
+        if (geminiRes.status === 429) {
+          return new Response(JSON.stringify({ error: "Gemini rate limit reached (or quota exhausted). Check your Google AI Studio account billing, then retry in a moment." }), {
+            status: 429,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
         }
-      : {
-          model: selectedModel,
-          prompt,
-          size,
-          quality,
-          output_format: "png",
-          n: 1,
-        };
-
-    // Call Lovable AI Gateway image endpoint (non-streaming for simplicity)
-    const aiRes = await fetch("https://ai.gateway.lovable.dev/v1/images/generations", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(requestBody),
-    });
-
-    if (!aiRes.ok) {
-      const errText = await aiRes.text();
-      if (aiRes.status === 429) {
-        return new Response(JSON.stringify({ error: "AI Gateway rate limit reached. Please retry in a moment." }), {
-          status: 429,
+        return new Response(JSON.stringify({ error: `Image generation failed: ${errText.slice(0, 500)}` }), {
+          status: geminiRes.status,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      if (aiRes.status === 402) {
-        return new Response(JSON.stringify({ error: "Workspace AI credits are depleted. Add credits in Lovable → Settings → Plans & credits, then retry.", code: "AI_CREDITS_DEPLETED" }), {
-          status: 402,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      return new Response(JSON.stringify({ error: `Image generation failed: ${errText}` }), {
-        status: aiRes.status,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      const geminiJson = await geminiRes.json();
+      const parts = geminiJson?.candidates?.[0]?.content?.parts ?? [];
+      const imagePart = parts.find((p: { inlineData?: { data?: string }; inline_data?: { data?: string } }) => p?.inlineData?.data || p?.inline_data?.data);
+      b64 = imagePart?.inlineData?.data || imagePart?.inline_data?.data;
+    } else {
+      const openaiRes = await fetch("https://api.openai.com/v1/images/generations", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${OPENAI_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ model: selectedModel, prompt, size, quality, output_format: "png", n: 1 }),
       });
+      if (!openaiRes.ok) {
+        const errText = await openaiRes.text();
+        if (openaiRes.status === 429) {
+          return new Response(JSON.stringify({ error: "OpenAI rate limit reached (or quota exhausted). Check your OpenAI account billing, then retry in a moment." }), {
+            status: 429,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        return new Response(JSON.stringify({ error: `Image generation failed: ${errText.slice(0, 500)}` }), {
+          status: openaiRes.status,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const openaiJson = await openaiRes.json();
+      b64 = openaiJson?.data?.[0]?.b64_json;
     }
 
-    const aiJson = await aiRes.json();
-    const b64 = aiJson?.data?.[0]?.b64_json;
     if (!b64) {
       return new Response(JSON.stringify({ error: "No image returned by model" }), {
         status: 502,

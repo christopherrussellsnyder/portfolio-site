@@ -17,14 +17,10 @@ import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 // already-working checkout/portal/check-subscription flows). Keep both
 // copies in sync if a new price tier is ever added.
 const PRODUCT_TO_TIER: Record<string, string> = {
-  "prod_UuPs7XFGchuAOC": "pro",
-  "prod_UuPsofAJQj79gO": "pro",
-  "prod_UuPsM90xu8d47e": "agency",
-  "prod_UuPtrGta7sU60Q": "agency",
-  "prod_UJLxjx4LDdH1Ps": "pro",
-  "prod_UJLxyYaqUCGjHg": "pro",
-  "prod_UJLyj76FsosYjb": "agency",
-  "prod_UJLyrKQhr9PclL": "agency",
+  "prod_VYtSv2K8Ql2hRQ": "pro",
+  "prod_VYtUDGBCu97oWs": "pro",
+  "prod_VYtVdc8DeXEEYj": "agency",
+  "prod_VYtXMV4VBsnjpU": "agency",
 };
 
 const RELEVANT_EVENTS = new Set([

@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
+import { getFunctionErrorMessage } from '@/lib/edge-function-error';
 
 const SEAT_LIMIT = 10;
 
@@ -80,7 +81,7 @@ export function TeamMembersSection() {
       const { data, error } = await supabase.functions.invoke('invite-workspace-member', {
         body: { workspace_id: activeWorkspaceId, email, role: inviteRole },
       });
-      if (error) throw error;
+      if (error) throw new Error(await getFunctionErrorMessage(error, 'Failed to send invitation'));
       if (data?.error) throw new Error(data.error);
       toast.success(
         data?.emailSent

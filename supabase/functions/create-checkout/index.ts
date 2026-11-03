@@ -40,12 +40,12 @@ serve(async (req) => {
     if (!priceId) throw new Error("Price ID is required");
 
     const MONTHLY_PRICE_IDS = new Set([
-      "price_1U1Y9eL7HyckspfcrBl45Coy", // Pro monthly
-      "price_1U1YAIL7HyckspfcyT4yah1y", // Agency monthly
+      "price_1UXlf72L0QxUPUo7rp3rlVJD", // Pro monthly
+      "price_1UXlit2L0QxUPUo754lJn4pt", // Agency monthly
     ]);
     const YEARLY_PRICE_IDS = new Set([
-      "price_1U1YHXL7HyckspfcTI9T3cWH", // Pro yearly
-      "price_1U1YHqL7HyckspfcXu9IV3Bk", // Agency yearly
+      "price_1UXlhB2L0QxUPUo7s6gBxFoU", // Pro yearly
+      "price_1UXlkt2L0QxUPUo7OmDAgwQ2", // Agency yearly
     ]);
     if (!MONTHLY_PRICE_IDS.has(priceId) && !YEARLY_PRICE_IDS.has(priceId)) {
       throw new Error("Invalid price ID");
@@ -91,6 +91,7 @@ serve(async (req) => {
       status: 200,
     });
   } catch (error) {
+    console.error("create-checkout error:", error?.message, error?.raw?.message ?? "");
     return new Response(JSON.stringify({ error: error.message }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 500,

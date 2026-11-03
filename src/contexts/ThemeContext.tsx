@@ -20,6 +20,11 @@ const THEMED_ROUTE_PREFIXES = [
   '/settings',
   '/reports',
   '/admin',
+  '/ab-testing',
+  '/analytics',
+  '/automation',
+  '/audience-intelligence',
+  '/competitor-monitoring',
 ];
 
 function isThemedRoute(pathname: string) {

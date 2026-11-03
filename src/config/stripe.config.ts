@@ -2,13 +2,13 @@ export const STRIPE_TIERS = {
   pro: {
     name: 'Pro',
     monthly: {
-      price_id: 'price_1U1Y9eL7HyckspfcrBl45Coy',
-      product_id: 'prod_UuPs7XFGchuAOC',
+      price_id: 'price_1UXlf72L0QxUPUo7rp3rlVJD',
+      product_id: 'prod_VYtSv2K8Ql2hRQ',
       price: 99,
     },
     yearly: {
-      price_id: 'price_1U1YHXL7HyckspfcTI9T3cWH',
-      product_id: 'prod_UuPsofAJQj79gO',
+      price_id: 'price_1UXlhB2L0QxUPUo7s6gBxFoU',
+      product_id: 'prod_VYtUDGBCu97oWs',
       price: 831,
     },
     // Enforced server-side in generate-strategy/index.ts -- keep these two
@@ -18,13 +18,13 @@ export const STRIPE_TIERS = {
   agency: {
     name: 'Agency',
     monthly: {
-      price_id: 'price_1U1YAIL7HyckspfcyT4yah1y',
-      product_id: 'prod_UuPsM90xu8d47e',
+      price_id: 'price_1UXlit2L0QxUPUo754lJn4pt',
+      product_id: 'prod_VYtVdc8DeXEEYj',
       price: 299,
     },
     yearly: {
-      price_id: 'price_1U1YHqL7HyckspfcXu9IV3Bk',
-      product_id: 'prod_UuPtrGta7sU60Q',
+      price_id: 'price_1UXlkt2L0QxUPUo7OmDAgwQ2',
+      product_id: 'prod_VYtXMV4VBsnjpU',
       price: 2511,
     },
     strategies_limit: 75,
@@ -42,16 +42,10 @@ export const TRIAL_STRATEGY_LIMIT = STARTER_STRATEGY_LIMIT;
 // frontend caller, but a stale version here would mislabel legacy
 // subscribers' tier if something ever reads it for display.
 export const PRODUCT_TO_TIER: Record<string, string> = {
-  // Current live products
-  'prod_UuPs7XFGchuAOC': 'pro',
-  'prod_UuPsofAJQj79gO': 'pro',
-  'prod_UuPsM90xu8d47e': 'agency',
-  'prod_UuPtrGta7sU60Q': 'agency',
-  // Historical products retained for existing subscriptions
-  'prod_UJLxjx4LDdH1Ps': 'pro',
-  'prod_UJLxyYaqUCGjHg': 'pro',
-  'prod_UJLyj76FsosYjb': 'agency',
-  'prod_UJLyrKQhr9PclL': 'agency',
+  'prod_VYtSv2K8Ql2hRQ': 'pro',
+  'prod_VYtUDGBCu97oWs': 'pro',
+  'prod_VYtVdc8DeXEEYj': 'agency',
+  'prod_VYtXMV4VBsnjpU': 'agency',
 };
 
 export type SubscriptionTier = 'pro' | 'agency' | null;

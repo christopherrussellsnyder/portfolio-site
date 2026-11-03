@@ -129,7 +129,7 @@ const RELIABILITY: { match: RegExp; score: number }[] = [
   { match: /^performance_feedback|first_party|niche_calibration/i, score: 1.0 },
   { match: /^meta-marketing-api|real_api|connected_ad_account/i, score: 0.9 },
   { match: /^crawl:/i, score: 0.85 },          // the business's own published truth
-  { match: /^semrush/i, score: 0.8 },          // licensed measurement vendor
+  { match: /^semrush|^dataforseo/i, score: 0.8 }, // licensed measurement vendor
   { match: /^meta-ad-library/i, score: 0.6 },  // real but unrepresentative sample
   { match: /^reddit/i, score: 0.5 },           // real language, unverified claims
   { match: /^seasonality|^budget/i, score: 0.7 }, // deterministic, from real inputs
@@ -152,7 +152,7 @@ export function recencyOf(source: string, observedAt?: string | null): number {
   if (!Number.isFinite(ageDays) || ageDays < 0) return 0.6;
   const halfLife = /ad-library|reddit|campaign_intelligence/i.test(source)
     ? 14
-    : /semrush|crawl/i.test(source)
+    : /semrush|dataforseo|crawl/i.test(source)
     ? 90
     : 45;
   return Math.max(0.1, Math.pow(0.5, ageDays / halfLife));
