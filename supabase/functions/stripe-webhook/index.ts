@@ -17,7 +17,7 @@ import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 // already-working checkout/portal/check-subscription flows). Keep both
 // copies in sync if a new price tier is ever added.
 const PRODUCT_TO_TIER: Record<string, string> = {
-  "prod_UuPs7XFGchuAOC": "pro",
+  "prod_VYsbYD5nvAOleS": "pro", // TEST MODE -- swap to live-mode product before launch
   "prod_UuPsofAJQj79gO": "pro",
   "prod_UuPsM90xu8d47e": "agency",
   "prod_UuPtrGta7sU60Q": "agency",

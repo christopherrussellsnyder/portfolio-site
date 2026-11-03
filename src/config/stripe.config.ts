@@ -2,8 +2,10 @@ export const STRIPE_TIERS = {
   pro: {
     name: 'Pro',
     monthly: {
-      price_id: 'price_1U1Y9eL7HyckspfcrBl45Coy',
-      product_id: 'prod_UuPs7XFGchuAOC',
+      // TEST MODE price/product, created for the first end-to-end checkout
+      // test -- swap to the live-mode IDs before real launch.
+      price_id: 'price_1UXkqY2L0QxUPUo7vJqhR6Cl',
+      product_id: 'prod_VYsbYD5nvAOleS',
       price: 99,
     },
     yearly: {
@@ -43,7 +45,7 @@ export const TRIAL_STRATEGY_LIMIT = STARTER_STRATEGY_LIMIT;
 // subscribers' tier if something ever reads it for display.
 export const PRODUCT_TO_TIER: Record<string, string> = {
   // Current live products
-  'prod_UuPs7XFGchuAOC': 'pro',
+  'prod_VYsbYD5nvAOleS': 'pro', // TEST MODE -- swap to live-mode product before launch
   'prod_UuPsofAJQj79gO': 'pro',
   'prod_UuPsM90xu8d47e': 'agency',
   'prod_UuPtrGta7sU60Q': 'agency',

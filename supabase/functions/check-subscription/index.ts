@@ -7,7 +7,7 @@ import { isFounderEmail } from "../_shared/founder.ts";
 
 const PRODUCT_TO_TIER: Record<string, string> = {
   // Current live products
-  "prod_UuPs7XFGchuAOC": "pro",
+  "prod_VYsbYD5nvAOleS": "pro", // TEST MODE -- swap to live-mode product before launch
   "prod_UuPsofAJQj79gO": "pro",
   "prod_UuPsM90xu8d47e": "agency",
   "prod_UuPtrGta7sU60Q": "agency",

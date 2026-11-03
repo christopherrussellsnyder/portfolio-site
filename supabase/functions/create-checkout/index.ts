@@ -40,7 +40,7 @@ serve(async (req) => {
     if (!priceId) throw new Error("Price ID is required");
 
     const MONTHLY_PRICE_IDS = new Set([
-      "price_1U1Y9eL7HyckspfcrBl45Coy", // Pro monthly
+      "price_1UXkqY2L0QxUPUo7vJqhR6Cl", // Pro monthly -- TEST MODE, swap to live before launch
       "price_1U1YAIL7HyckspfcyT4yah1y", // Agency monthly
     ]);
     const YEARLY_PRICE_IDS = new Set([
