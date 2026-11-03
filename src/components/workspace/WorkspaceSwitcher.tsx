@@ -63,7 +63,7 @@ export function WorkspaceSwitcher({ compact = false, className = '' }: Props) {
         <DropdownMenuTrigger asChild>
           <Button
             variant="ghost"
-            className={`h-9 gap-2 px-3 border border-border bg-muted hover:bg-card text-white ${className}`}
+            className={`h-9 gap-2 px-3 border border-border bg-muted hover:bg-card text-foreground ${className}`}
           >
             <Building2 className="h-4 w-4 text-primary" />
             {!compact && (
@@ -83,7 +83,7 @@ export function WorkspaceSwitcher({ compact = false, className = '' }: Props) {
             <DropdownMenuItem
               key={w.id}
               onClick={() => switchWorkspace(w.id)}
-              className="cursor-pointer text-white hover:bg-card focus:bg-card"
+              className="cursor-pointer text-foreground hover:bg-card focus:bg-card"
             >
               <Building2 className="h-4 w-4 mr-2 text-muted-foreground" />
               <span className="flex-1 truncate">{w.name}</span>
@@ -94,7 +94,7 @@ export function WorkspaceSwitcher({ compact = false, className = '' }: Props) {
           {canCreateMore ? (
             <DropdownMenuItem
               onClick={() => setDialogOpen(true)}
-              className="cursor-pointer text-white hover:bg-card focus:bg-card"
+              className="cursor-pointer text-foreground hover:bg-card focus:bg-card"
             >
               <Plus className="h-4 w-4 mr-2 text-primary" />
               New workspace
@@ -118,7 +118,7 @@ export function WorkspaceSwitcher({ compact = false, className = '' }: Props) {
       </DropdownMenu>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="bg-muted border-border text-white">
+        <DialogContent className="bg-muted border-border text-foreground">
           <DialogHeader>
             <DialogTitle>New workspace</DialogTitle>
             <DialogDescription className="text-muted-foreground">
