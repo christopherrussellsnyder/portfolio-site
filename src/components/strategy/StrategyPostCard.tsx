@@ -3,7 +3,7 @@ import {
   Copy, Edit, Sparkles, Clock, Eye, Heart, Hash,
   ChevronDown, ChevronUp, Check, Image, Video,
   FileText, Layout, MessageCircle, Share2, Bookmark,
-  Lightbulb, Target, Palette, AlertCircle, Zap, ThumbsUp, Loader2, FlaskConical, Gauge, TrendingUp, TrendingDown
+  Lightbulb, Target, Palette, AlertCircle, Zap, ThumbsUp, Loader2, FlaskConical, Gauge, TrendingUp, TrendingDown, ShieldCheck
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -837,6 +837,20 @@ export function StrategyPostCard({ post, platform, onEdit, onAskAI }: StrategyPo
                         <div className="rounded-md border border-primary/20 bg-primary/5 px-3 py-2">
                           <p className="text-xs text-primary font-medium">Audience Fit:</p>
                           <p className="text-sm text-foreground">{strategicRationale.audience_fit}</p>
+                        </div>
+                      )}
+                      {strategicRationale.critic_note && (
+                        <div className="rounded-md border border-border bg-muted/20 px-3 py-2">
+                          <p className="text-xs font-medium text-foreground flex items-center gap-1.5">
+                            <ShieldCheck className="w-3.5 h-3.5 text-primary shrink-0" />
+                            Reviewed by a second AI
+                            {strategicRationale.critic_rewritten && (
+                              <span className="text-[10px] font-normal text-primary bg-primary/10 rounded-full px-1.5 py-0.5">
+                                Rewritten
+                              </span>
+                            )}
+                          </p>
+                          <p className="text-sm text-foreground mt-1">{strategicRationale.critic_note}</p>
                         </div>
                       )}
                       {strategicRationale.why_this_day && (

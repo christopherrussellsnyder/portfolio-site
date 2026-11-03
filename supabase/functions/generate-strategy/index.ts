@@ -484,9 +484,18 @@ Mark "rewrite" for any post scoring under 75, and for every post named in the pr
       };
       // Piggyback on strategic_rationale (an existing, already-persisted jsonb
       // column) rather than adding a migration for one more string field --
-      // StrategyPostCard already renders this object's other fields.
-      if (s.audience_fit) {
-        p.strategic_rationale = { ...(p.strategic_rationale || {}), audience_fit: s.audience_fit };
+      // StrategyPostCard already renders this object's other fields. The
+      // critic's actual per-post verdict/reasoning was computed above but
+      // never persisted past this function -- only the bare numeric score
+      // reached the DB (critic_score). Carrying the reasoning through lets
+      // the UI show users what the second-pass review actually found,
+      // instead of a number with no explanation behind it.
+      if (s.audience_fit || s.problem) {
+        p.strategic_rationale = {
+          ...(p.strategic_rationale || {}),
+          ...(s.audience_fit ? { audience_fit: s.audience_fit } : {}),
+          ...(s.problem ? { critic_verdict: s.verdict, critic_note: s.problem } : {}),
+        };
       }
     }
 
@@ -508,6 +517,7 @@ Mark "rewrite" for any post scoring under 75, and for every post named in the pr
         p.strategic_rationale = { ...(p.strategic_rationale || {}), differentiation_anchor: r.differentiation_anchor };
       }
       p.quality_review = { ...(p.quality_review || {}), rewritten: true };
+      p.strategic_rationale = { ...(p.strategic_rationale || {}), critic_rewritten: true };
       applied++;
     }
     console.log(`Critic pass: ${scores.length} scored, ${applied} rewritten`);
